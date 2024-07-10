@@ -106,13 +106,14 @@ def main():
 
     settings = loadSettings()
 
-    window = tk.Tk()
+    window.geometry("1300x800")
+    window.config(background=GRAY)
     window.iconbitmap("icon.ico")
     window.title("Power Supply Manager")
 
-    window.geometry("1300x800")
-    window.config(background=GRAY)
     centerFrame = tk.Frame(window, width=1300, height=800, background=GRAY)
+
+    textConfigFrame = tk.Frame(window, width=1400, height=400, padx=20, background=GRAY)
 
     # Region connection status
     connectionStatus = tk.StringVar()
@@ -120,41 +121,80 @@ def main():
     # End region
 
     # Region machine address chooser
-    machineAddrChooserContainer, machineAddr = entryLabelCombo(centerFrame, settings["machineAddress"], 50,
-        "Machine address")
+    machineAddrChooserContainer, machineAddr = entryLabelCombo(textConfigFrame, settings["machineAddress"], 78, "Machine address")
     makeTextWidget("Button", machineAddrChooserContainer, "Connect",
         command=lambda: newPowerSupply(machineAddr.get())).grid(row=0, column=2, padx=20)
-    machineAddrChooserContainer.config(padx=20, pady=20, background=GRAY)
-    machineAddrChooserContainer.place(relx=0.5, y=50, anchor=tk.CENTER)
-    # End region
+    machineAddrChooserContainer.config(pady=20, background=GRAY)
+    machineAddrChooserContainer.place(relx=0, y=50, anchor=tk.W)
 
-    # Region file chooser
-    fileChooserContainer, filePath = entryLabelCombo(centerFrame, settings["fileURI"], 90, "Setpoint file path")
-    makeTextWidget("Button", fileChooserContainer, "Choose file",
-        command=lambda: filePath.set(askopenfilename(filetypes=[("CSV Files", ".csv")]))).grid(row=0,
-        column=2,
-        padx=20)
-    fileChooserContainer.config(padx=20, pady=20, background=GRAY)
-    fileChooserContainer.place(relx=0.5, y=125, anchor=tk.CENTER)
     # End region
 
     # Region data location chooser
-    folderChooserContainer, folderPath = entryLabelCombo(centerFrame, settings["dataStoragePath"], 75,
-        "Data storage location")
-    makeTextWidget("Button", folderChooserContainer, "Choose folder",
-        command=lambda: folderPath.set(askdirectory())).grid(row=0, column=2, padx=20)
-    folderChooserContainer.config(padx=20, pady=20, background=GRAY)
-    folderChooserContainer.place(relx=0.5, y=200, anchor=tk.CENTER)
+    def setFolderPath():
+        directory = askdirectory()
+        if directory!="":
+            folderPath.set(directory)
+
+    folderChooserContainer, folderPath = entryLabelCombo(textConfigFrame, settings["dataStoragePath"], 70, "Data storage location")
+    makeTextWidget("Button", folderChooserContainer, "Choose folder", command=lambda: setFolderPath()).grid(row=0, column=2, padx=20)
+    folderChooserContainer.config(pady=20, background=GRAY)
+    folderChooserContainer.place(relx=0, y=125, anchor=tk.W)
+
+    # End region
+
+    # Region file chooser
+    def setFilePath():
+        directory = askopenfilename(filetypes=[("CSV Files", ".csv")])
+        if directory!="":
+            filePath.set(directory)
+
+    fileChooserContainer, filePath = entryLabelCombo(textConfigFrame, settings["fileURI"], 77, "Profile file path")
+    makeTextWidget("Button", fileChooserContainer, "Choose file", command=setFilePath).grid(row=0, column=2, padx=20)
+    fileChooserContainer.config(pady=20, background=GRAY)
+    fileChooserContainer.place(relx=0, y=200, anchor=tk.W)
+
+    # End region
+
+    # Region profile type chooser
+    @simpleTKCallback
+    def toggleTimeInputVisibility():
+        if profileType.get()=="Evenly spaced":
+            timeInputContainer.grid(row=0, column=2)
+        else:
+            timeInputContainer.grid_forget()
+
+    optionFrame, profileType = menuLabelCombo(textConfigFrame, "Profile type", *["Evenly spaced", "Ordered pairs"])
+    profileType.trace_add("write", toggleTimeInputVisibility)
+    optionFrame.config(background=GRAY)
+    optionFrame.place(relx=0, y=250)
     # End region
 
     # Region test time input
-    container, timeInput = entryLabelCombo(centerFrame, settings["testTime"], 5, "Test time (s)")
-    container.config(background=GRAY)
-    container.place(relx=0.5, y=280, anchor=tk.CENTER)
+    timeInputContainer, timeInput = entryLabelCombo(optionFrame, settings["testTime"], 4, "Test time (s)")
+    timeInputContainer.config(background=GRAY)
+    timeInputContainer.grid(row=0, column=2)
+    # End region
+
+    # Region target power input
+    targetPowerContainer, targetPowerInput = entryLabelCombo(textConfigFrame, 0, 4, "Target power (W)")
+    targetPowerContainer.config(background=GRAY)
+    targetPowerContainer.place(x=400, y=350, anchor=tk.W)
+
+    def toggleTargetPowerVisibility(highlighted: int):
+        if highlighted==0:
+            targetPowerContainer.place_forget()
+        else:
+            targetPowerContainer.place(x=400, y=350, anchor=tk.W)
+
+    # End region
+
+    # Region control type chooser
+    controlTypeToggle = HighlightedButtonPair(textConfigFrame, "Automatic control", "Manual control", onSwitch=toggleTargetPowerVisibility)
+    controlTypeToggle.frame.place(x=20, y=350, anchor=tk.W)
     # End region
 
     # Region reset voltage checkbox
-    checkContainer, resetVoltage = entryCheckButtonCombo(centerFrame, "Set voltage to zero at experiment end")
+    checkContainer, resetVoltage = labelCheckButtonCombo(centerFrame, "Set voltage to zero at experiment end")
     resetVoltage.set(bool(settings["resetVoltage"]))
     checkContainer.config(background=GRAY)
     checkContainer.place(relx=0.5, y=365, anchor=tk.CENTER)
@@ -200,9 +240,10 @@ def main():
     abortExpBtn = makeTextWidget("Button", centerFrame, "Abort test", command=abortExp)
     # End region
 
+    textConfigFrame.place(relx=0, rely=0, anchor=tk.NW)
     centerFrame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-    newPowerSupply(machineAddr.get())
+    window.after(25, lambda: newPowerSupply(machineAddr.get()))
 
     window.mainloop()
     saveSettings()

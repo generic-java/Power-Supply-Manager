@@ -11,7 +11,7 @@ from tkinter import messagebox
 from tkinter.filedialog import askdirectory
 from tkinter.filedialog import askopenfilename
 
-from powersupplyexp import PowerSupply, Experiment, killActiveExperiment
+from powersupplyexp import PowerSupply, Experiment, killActiveExperiment, pauseActiveExperiment, getActiveExperiment
 from tkutils import *
 
 DEFAULT_SETTINGS = {
@@ -46,6 +46,10 @@ def main():
         powerSupply.onDisconnect(onPowerSupplyDisconnect)
         powerSupply.tryConnect()
 
+    def experimentOver():
+        window.after(500, stopExperimentButton.grid_forget)
+        startExperimentButton.setState(on=True)
+
     def startNewExp():
         if not os.path.isfile(filePath.get()):
             if messagebox.askretrycancel("Invalid path", icon=messagebox.ERROR, message="The experiment could not be started because the provided path to the setpoint file is invalid."):
@@ -65,19 +69,22 @@ def main():
             "voltageReadout": targetVoltageReadout,
             "timeReadout": elapsedTimeReadout,
             "progressReadout": progressReadout,
+            "progressBar": progressBar,
             "actualVoltageReadout": actualVoltageReadout,
             "actualCurrentReadout": actualCurrentReadout,
             "powerReadout": powerReadout,
-            "onFinish": abortExp
+            "onFinish": experimentOver
         }
         Experiment(**expSettings).start()
-        abortExpBtn.place(relx=0.5, y=450, anchor=tk.CENTER)
-        startExp.place_forget()
+        stopExperimentButton.grid(row=0, column=2)
+        progressFrame.grid(row=0, column=1)
 
     def abortExp():
+        startExperimentButton.setState(on=True)
         killActiveExperiment()
-        startExp.place(relx=0.5, y=450, anchor=tk.CENTER)
-        abortExpBtn.place_forget()
+        stopExperimentButton.grid_forget()
+        progressFrame.grid_forget()
+
 
     def saveSettings():
         if not os.path.isdir(settingsDir):
@@ -107,13 +114,14 @@ def main():
     settings = loadSettings()
 
     window.geometry("1300x800")
+    window.minsize(1300, 800)
     window.config(background=GRAY)
     window.iconbitmap("icon.ico")
     window.title("Power Supply Manager")
 
     centerFrame = tk.Frame(window, width=1300, height=800, background=GRAY)
 
-    textConfigFrame = tk.Frame(window, width=1400, height=400, padx=20, background=GRAY)
+    textConfigFrame = tk.Frame(window, width=1400, height=800, padx=20, background=GRAY)
 
     # Region connection status
     connectionStatus = tk.StringVar()
@@ -172,13 +180,18 @@ def main():
     # Region test time input
     timeInputContainer, timeInput = entryLabelCombo(optionFrame, settings["testTime"], 4, "Test time (s)")
     timeInputContainer.config(background=GRAY)
-    timeInputContainer.grid(row=0, column=2)
+    # End region
+
+    # Region reset voltage switch
+    checkContainer, resetVoltage = labelSwitchCombo(optionFrame, "Set voltage to zero at experiment end")
+    resetVoltage.set(bool(settings["resetVoltage"]))
+    checkContainer.config(background=GRAY)
+    checkContainer.grid(row=0, column=3)
     # End region
 
     # Region target power input
     targetPowerContainer, targetPowerInput = entryLabelCombo(textConfigFrame, 0, 4, "Target power (W)")
     targetPowerContainer.config(background=GRAY)
-    targetPowerContainer.place(x=400, y=350, anchor=tk.W)
 
     def toggleTargetPowerVisibility(highlighted: int):
         if highlighted==0:
@@ -191,13 +204,43 @@ def main():
     # Region control type chooser
     controlTypeToggle = HighlightedButtonPair(textConfigFrame, "Automatic control", "Manual control", onSwitch=toggleTargetPowerVisibility)
     controlTypeToggle.frame.place(x=20, y=350, anchor=tk.W)
+
     # End region
 
-    # Region reset voltage checkbox
-    checkContainer, resetVoltage = labelCheckButtonCombo(centerFrame, "Set voltage to zero at experiment end")
-    resetVoltage.set(bool(settings["resetVoltage"]))
-    checkContainer.config(background=GRAY)
-    checkContainer.place(relx=0.5, y=365, anchor=tk.CENTER)
+    # Region play pause stop buttons
+    experimentManagerFrame = tk.Frame(textConfigFrame, background=GRAY)
+
+    def playPauseExp(playing: bool):
+        if playing:
+            pauseActiveExperiment()
+        else:
+            activeExperiment = getActiveExperiment()
+            if activeExperiment is not None:
+                if activeExperiment.isActive():
+                    activeExperiment.unpause()
+                else:
+                    startNewExp()
+            else:
+                startNewExp()
+
+    controlButtonFrame = tk.Frame(experimentManagerFrame, width=100, height=50, background=GRAY, padx=20)
+
+    startExperimentButton = Switch(controlButtonFrame, switchType=PLAY_PAUSE, onswitch=playPauseExp)
+    stopExperimentButton = makeImgButton(controlButtonFrame, "./stop.PNG", (50, 50), command=abortExp)
+
+    startExperimentButton.button.grid(row=0, column=0)
+    spacer(controlButtonFrame, 20).grid(row=0, column=1)
+    controlButtonFrame.grid(row=0, column=0)
+
+    progressFrame = tk.Frame(experimentManagerFrame, background=GRAY)
+    progressLabel = makeTextWidget("Label", progressFrame, "Progress")
+    progressBar = ProgressBar(progressFrame, (300, 25), animated=True)
+    progressReadout = Readout(tk.StringVar(), tk.Label(progressFrame, padx=20), "")
+    progressLabel.grid(row=0, column=0)
+    spacer(progressFrame, 20).grid(row=0, column=1)
+    progressBar.bar.grid(row=0, column=2)
+    progressReadout.getLabel().grid(row=0, column=3)
+    experimentManagerFrame.place(x=0, y=650, anchor=tk.W)
     # End region
 
     # Region progress readout
@@ -208,9 +251,6 @@ def main():
 
     elapsedTimeReadout = Readout(tk.StringVar(), tk.Label(progressReadoutContainer, padx=20), "Elapsed time: ")
     elapsedTimeReadout.getLabel().grid(row=0, column=1)
-
-    progressReadout = Readout(tk.StringVar(), tk.Label(progressReadoutContainer, padx=20), "Progress: ")
-    progressReadout.getLabel().grid(row=0, column=2)
 
     progressReadoutContainer.place(relx=0.5, y=550, anchor=tk.CENTER)
     # End region
@@ -235,12 +275,10 @@ def main():
     # End region
 
     # Region start and abort experiment buttons
-    startExp = makeTextWidget("Button", centerFrame, "Begin test", command=startNewExp)
-    startExp.place(relx=0.5, y=450, anchor=tk.CENTER)
     abortExpBtn = makeTextWidget("Button", centerFrame, "Abort test", command=abortExp)
     # End region
 
-    textConfigFrame.place(relx=0, rely=0, anchor=tk.NW)
+    textConfigFrame.place(x=0, y=0, anchor=tk.NW)
     centerFrame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
     window.after(25, lambda: newPowerSupply(machineAddr.get()))

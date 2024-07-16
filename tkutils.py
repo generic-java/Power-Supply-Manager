@@ -1,5 +1,7 @@
 import sys
+import time
 import tkinter as tk
+from threading import Thread
 
 from PIL import Image, ImageTk
 
@@ -59,7 +61,21 @@ DEFAULT_MENU = {
     "background": BLUE,
 }
 
+PROGRESS_BAR_WRAPPER = {
+    "background": GRAY,
+    "padx": 5,
+    "pady": 5,
+    "highlightbackground": BLUE,
+    "highlightthickness": 2
+}
+
 FINISHED_GREEN = "#00ff00"
+
+TOGGLE = (50, 25)
+
+PLAY_PAUSE = (50, 50)
+
+_images = []
 
 
 def simpleTKCallback(func):
@@ -102,12 +118,12 @@ def entryLabelCombo(master, entryText: str, entryWidth: int, labelText: str) -> 
     return frame, stringVar
 
 
-def labelCheckButtonCombo(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
+def labelSwitchCombo(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
     frame = tk.Frame(master)
     label = makeTextWidget("Label", frame, labelText, padx=20)
     boolVar = tk.BooleanVar()
     boolVar.set(True)
-    checkbox = SimpleCheckbox(frame)
+    checkbox = Switch(frame)
     checkbox.button.grid(row=0, column=1)
     label.grid(row=0, column=0)
     return frame, boolVar
@@ -122,13 +138,32 @@ def menuLabelCombo(master, labelText, *options):
     return frame, menu.selectedOption
 
 
-class SimpleCheckbox:
-    def __init__(self, master, checked=True):
-        self.checked = Image.open("./checked.PNG").resize((50, 25))
-        self.unchecked = Image.open("./unchecked.PNG").resize((50, 25))
-        self.checked = ImageTk.PhotoImage(self.checked)
-        self.unchecked = ImageTk.PhotoImage(self.unchecked)
-        self.button = tk.Button(master, image=self.checked, bd=-1, background=GRAY, activebackground=GRAY)
+def spacer(master, width):
+    return tk.Frame(master, width=width, background=GRAY)
+
+
+def makeImgButton(master, imagePath, size, command=lambda *args: None):
+    img = ImageTk.PhotoImage(Image.open(imagePath).resize(size))
+    _images.append(img)  # If this isn't stored somewhere permanently, it will be garbage collected and tk will not show it
+    button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY, image=img, command=command)
+    return button
+
+
+class Switch:
+    def __init__(self, master, switchType=TOGGLE, checked=True, onswitch=lambda checked: None):
+        self._onswitch = onswitch
+        if switchType is TOGGLE:
+            self.checked = ImageTk.PhotoImage(Image.open("./checked.PNG").resize(TOGGLE))
+            self.unchecked = ImageTk.PhotoImage(Image.open("./unchecked.PNG").resize(TOGGLE))
+        else:
+            self.checked = ImageTk.PhotoImage(Image.open("./play.PNG").resize(PLAY_PAUSE))
+            self.unchecked = ImageTk.PhotoImage(Image.open("./pause.PNG").resize(PLAY_PAUSE))
+
+        self.button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY)
+        if checked:
+            self.button.config(image=self.checked)
+        else:
+            self.button.config(image=self.unchecked)
         self.button.config(command=self.toggle)
         self.button.image = self.checked
         self._checked = checked
@@ -139,6 +174,11 @@ class SimpleCheckbox:
             self.button.config(image=self.checked)
         else:
             self.button.config(image=self.unchecked)
+        self._onswitch(self._checked)
+
+    def setState(self, on: bool):
+        if not self._checked and on or self.checked and not on:
+            self.toggle()
 
 
 class Menu:
@@ -233,7 +273,7 @@ class HighlightedButtonPair:
         rightSpacer.grid(row=0, column=1)
         self.secondButton.grid(row=0, column=2)
 
-    def getHighlighted(self):
+    def getHighlightedButton(self):
         return self._highlighted
 
     def _highlight(self, target):
@@ -250,6 +290,42 @@ class HighlightedButtonPair:
             self.secondButton.config(**DEFAULT_BUTTON)
         if current!=self._highlighted:
             self._onSwitch(self._highlighted)
+
+
+class ProgressBar(Thread):
+    def __init__(self, master, size: tuple, animated=False):
+        super().__init__()
+        self.daemon = True
+        self._size = size
+        self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2, highlightbackground=BLUE)
+        self.bar.create_rectangle((0, 0), self._size, fill=GRAY)
+        self._progressPercent = 0
+        self._displayedProgress = 0
+        self._lastDisplayedProgress = 0
+        self._animated = animated
+        self.start()
+
+    def reset(self):
+        self._displayedProgress = 0
+        self.update(0)
+
+    def update(self, progressPercent):
+        progressPercent = round(progressPercent, 2)
+        if 0 > progressPercent > 1:
+            raise AttributeError("The 'progressPercent' argument must be a number between 0 and 1")
+        else:
+            self._progressPercent = progressPercent
+            if not self._animated:
+                self._displayedProgress = self._progressPercent
+
+    def run(self):
+        while True:
+            self._displayedProgress += (self._progressPercent - self._displayedProgress) / 10
+            if self._lastDisplayedProgress > self._displayedProgress:
+                self.bar.delete("all")
+            self.bar.create_rectangle((0, 0), (self._displayedProgress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
+            self._lastDisplayedProgress = self._displayedProgress
+            time.sleep(0.04)
 
 
 class Readout:

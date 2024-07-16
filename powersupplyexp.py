@@ -1,10 +1,8 @@
 import csv
 import os
 import threading
-import time
 import tkinter
 from datetime import datetime
-from threading import Thread
 from tkinter import messagebox
 from tkinter.filedialog import askdirectory
 
@@ -16,8 +14,13 @@ _activeExp = None
 _activePowerSupply = None
 
 
-def getActiveExp():
+def getActiveExperiment():
     return _activeExp
+
+
+def pauseActiveExperiment():
+    if _activeExp is not None:
+        _activeExp.pause()
 
 
 def killActiveExperiment():
@@ -103,7 +106,7 @@ class Profile:
             pass  # TODO: add actual code here
 
     def getProgress(self):
-        return max(self.index, len(self.points), 0) / len(self.points) * 100
+        return max(self.index + 1, 0) / len(self.points)
 
     def __iter__(self):
         self.index = -1
@@ -136,6 +139,7 @@ class Experiment(Thread):
         self.voltageReadout = kwargs["voltageReadout"]
         self.timeReadout = kwargs["timeReadout"]
         self.progressReadout = kwargs["progressReadout"]
+        self.progressBar = kwargs["progressBar"]
         self.actualVoltageReadout = kwargs["actualVoltageReadout"]
         self.actualCurrentReadout = kwargs["actualCurrentReadout"]
         self.powerReadout = kwargs["powerReadout"]
@@ -146,13 +150,16 @@ class Experiment(Thread):
         self.daemon = True
         self.data = []
         self.setpoints = []
-        self.paused = False
+        self._paused = False
         self.manualControlEnabled = False
         self.profile = Profile(self.filePathStringVar, Profile.EVENLY_SPACED, self.runTimeStringVar)
         self.targetVoltage = 0
 
     def pause(self):
-        self.paused = True
+        self._paused = True
+
+    def unpause(self):
+        self._paused = False
 
     def _daemon(self):
         global _activeExp
@@ -160,11 +167,10 @@ class Experiment(Thread):
             if self is not _activeExp:
                 self.kill()
                 break
-            if not self.paused:
+            if not self._paused:
                 self.elapsedTime = round(time.time() - self.startTimestamp, 2)
                 self.voltageReadout.update(self.targetVoltage)
                 self.timeReadout.update("{:.2f}".format(min(self.elapsedTime, self.runTime)))
-                self.progressReadout.update("{:.2f}".format(min(100 * self.elapsedTime / self.runTime, 99)) + "%")
                 self.actualVoltageReadout.update("{:.3f}".format(self.powerSupply.getVoltage()))
                 self.actualCurrentReadout.update("{:.3f}".format(self.powerSupply.getCurrent()))
                 self.powerReadout.update("{:.3f}".format(self.powerSupply.getPower()))
@@ -193,14 +199,18 @@ class Experiment(Thread):
             self.filePathStringVar.after(0, func=retry)
 
     def runAuto(self):
+        self.progressBar.reset()
+        self.progressReadout.update("0.00%")
         for targetVoltage, waitTime in self.profile:
-            while self.paused or self.manualControlEnabled:
+            while self._paused or self.manualControlEnabled:
                 time.sleep(0.01)
             time.sleep(waitTime)
             if not self._active:
                 break
             self.targetVoltage = max(targetVoltage, 0.0)
             self.powerSupply.setVoltage(self.targetVoltage)
+            self.progressBar.update(self.profile.getProgress())
+            self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
 
     def runManual(self):
         pass
@@ -228,6 +238,9 @@ class Experiment(Thread):
 
     def kill(self):
         self._active = False
+
+    def isActive(self):
+        return self._active
 
 
 def getActivePowerSupply():

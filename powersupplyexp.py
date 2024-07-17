@@ -175,7 +175,7 @@ class Experiment(Thread):
                 self.actualCurrentReadout.update("{:.3f}".format(self.powerSupply.getCurrent()))
                 self.powerReadout.update("{:.3f}".format(self.powerSupply.getPower()))
                 self.data.append([self.elapsedTime, self.powerSupply.getTargetVoltage(), self.powerSupply.getVoltage(), self.powerSupply.getCurrent(), self.powerSupply.getPower()])
-            time.sleep(0.01)  # To free up CPU time
+            time.sleep(0.05)  # To free up CPU time
 
     def _saveExperimentData(self):
         now = datetime.now()

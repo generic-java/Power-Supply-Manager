@@ -11,6 +11,12 @@ GRAY = "#1f1f01"
 BLUE = "#7cdcfe"
 DEFAULT_FONT = ("Microsoft New Tai Lue", 14, "bold")
 
+MATPLOTLIB_TICK_FONT = {
+    "fontfamily": "Microsoft New Tai Lue",
+    "fontweight": "normal",
+    "fontsize": 10
+}
+
 DEFAULT_BUTTON = {
     "borderwidth": 0,
     "background": BLUE,
@@ -109,7 +115,7 @@ def makeTextWidget(classType: str, master, text: str, **kwargs):
     return makeTextWidgetEx(classType, master, text, **kwargs)[0]
 
 
-def entryLabelCombo(master, entryText: str, entryWidth: int, labelText: str) -> (tk.Frame, tk.StringVar):
+def labelEntryGroup(master, entryText: str, entryWidth: int, labelText: str) -> (tk.Frame, tk.StringVar):
     frame = tk.Frame(master)
     label = makeTextWidget("Label", frame, labelText, padx=20)
     entry, stringVar = makeTextWidgetEx("Entry", frame, entryText, width=entryWidth)
@@ -118,7 +124,7 @@ def entryLabelCombo(master, entryText: str, entryWidth: int, labelText: str) -> 
     return frame, stringVar
 
 
-def labelSwitchCombo(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
+def labelSwitchGroup(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
     frame = tk.Frame(master)
     label = makeTextWidget("Label", frame, labelText, padx=20)
     boolVar = tk.BooleanVar()
@@ -129,13 +135,13 @@ def labelSwitchCombo(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
     return frame, boolVar
 
 
-def menuLabelCombo(master, labelText, *options):
+def labelMenuGroup(master, labelText, *options):
     frame = tk.Frame(master)
     label = makeTextWidget("Label", frame, labelText, padx=20)
     menu = Menu(frame, options[1], *options)
     menu.menuButton.grid(row=0, column=1)
     label.grid(row=0, column=0)
-    return frame, menu.selectedOption
+    return frame, menu
 
 
 def spacer(master, width):
@@ -153,11 +159,11 @@ class Switch:
     def __init__(self, master, switchType=TOGGLE, checked=True, onswitch=lambda checked: None):
         self._onswitch = onswitch
         if switchType is TOGGLE:
-            self.checked = ImageTk.PhotoImage(Image.open("./checked.PNG").resize(TOGGLE))
-            self.unchecked = ImageTk.PhotoImage(Image.open("./unchecked.PNG").resize(TOGGLE))
+            self.checked = ImageTk.PhotoImage(Image.open("images/checked.png").resize(TOGGLE))
+            self.unchecked = ImageTk.PhotoImage(Image.open("images/unchecked.PNG").resize(TOGGLE))
         else:
-            self.checked = ImageTk.PhotoImage(Image.open("./play.PNG").resize(PLAY_PAUSE))
-            self.unchecked = ImageTk.PhotoImage(Image.open("./pause.PNG").resize(PLAY_PAUSE))
+            self.checked = ImageTk.PhotoImage(Image.open("images/play.png").resize(PLAY_PAUSE))
+            self.unchecked = ImageTk.PhotoImage(Image.open("images/pause.png").resize(PLAY_PAUSE))
 
         self.button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY)
         if checked:
@@ -186,7 +192,7 @@ class Menu:
         self._menuOpen = False
         self._mouseOverBtn = False
         self._mouseOverMenuFrame = False
-        self._dropdown = ImageTk.PhotoImage(Image.open("./drop_down.PNG").resize((8, 8)))
+        self._dropdown = ImageTk.PhotoImage(Image.open("images/drop_down.PNG").resize((8, 8)))
         self.menuButton, self.selectedOption = makeTextWidgetEx("Button", master, displayedOption)
         self.menuButton.config(image=self._dropdown, compound=tk.RIGHT)
         window.bind("<Button-1>", self._toggleVisibility)
@@ -236,6 +242,21 @@ class Menu:
             button.bind("<Enter>", onBtnMouseHover)
             button.bind("<Leave>", onBtnMouseLeave)
 
+    def onOptionSelect(self, function):
+        self.selectedOption.trace_add("write", simpleTKCallback(function))
+
+    def selectOption(self, chosenOption: str):
+        hasOption = False
+        for option in self.options:
+            if chosenOption==option:
+                hasOption = True
+        if not hasOption:
+            raise AttributeError(f"Menu object has no '{chosenOption}' option")
+        self.selectedOption.set(chosenOption)
+
+    def getSelectedOption(self):
+        return self.selectedOption.get()
+
     def _hide(self):
         self._menuFrame.place_forget()
         self._menuOpen = False
@@ -259,7 +280,7 @@ class HighlightedButtonPair:
 
         def makeBtnCmd(cmd, target):
             def newCmd():
-                self._highlight(target)
+                self.select(target)
                 cmd()
 
             return newCmd
@@ -268,7 +289,7 @@ class HighlightedButtonPair:
         self.firstButton = makeTextWidget("Button", self.frame, firstButtonText, command=makeBtnCmd(firstButtonCommand, target=0))
         self.secondButton = makeTextWidget("Button", self.frame, secondButtonText, command=makeBtnCmd(secondButtonCommand, target=1))
         self._highlighted = None
-        self._highlight(highlighted)
+        self.select(highlighted)
         self.firstButton.grid(row=0, column=0)
         rightSpacer.grid(row=0, column=1)
         self.secondButton.grid(row=0, column=2)
@@ -276,7 +297,7 @@ class HighlightedButtonPair:
     def getHighlightedButton(self):
         return self._highlighted
 
-    def _highlight(self, target):
+    def select(self, target):
         current = self._highlighted
         if 2 > target==int(target):
             self._highlighted = target

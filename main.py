@@ -12,7 +12,7 @@ from tkinter.filedialog import askdirectory
 from tkinter.filedialog import askopenfilename
 
 from graph import Graph
-from powersupplyexp import PowerSupply, Experiment, killActiveExperiment, pauseActiveExperiment, getActiveExperiment
+from power_supply_experiment import PowerSupply, Experiment, killActiveExperiment, pauseActiveExperiment, getActiveExperiment
 from tkutils import *
 
 windowSize = (1700, 900)
@@ -291,7 +291,7 @@ def main():
     # Region matplotlib graph
 
     # End region
-    graph = Graph(window, 4)
+    graph = Graph(window, 4, ["Target voltage", "Actual voltage", "Current", "Power"])
     graph.getWidget().place(relx=0.5, rely=1, anchor=tk.S)
     window.after(100, lambda: newPowerSupply(machineAddress.get()))
 

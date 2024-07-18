@@ -1,7 +1,6 @@
 import csv
 import os
 import threading
-import tkinter
 from datetime import datetime
 from tkinter import messagebox
 from tkinter.filedialog import askdirectory
@@ -26,6 +25,7 @@ def pauseActiveExperiment():
 def killActiveExperiment():
     if _activeExp is not None:
         _activeExp.kill()
+        _activeExp.unpause()
 
 
 class Timer:
@@ -125,6 +125,11 @@ class Profile:
 
 
 class Experiment(Thread):
+    MIN_WAIT_TIME: float = 0.001
+    """
+    If an experiment instance is waiting to switch to the next profile point and has less than the minimum wait time, it will move to the next point without sleeping for the entire duration.  This will increase the time accuracy of the experiment
+    """
+
     def __init__(self, **kwargs):
         super().__init__()
         global _activePowerSupply
@@ -155,7 +160,13 @@ class Experiment(Thread):
         self.manualControlEnabled = False
         self.profile = Profile(self.filePathStringVar, Profile.EVENLY_SPACED, self.runTimeStringVar)
         self.targetVoltage = 0
-        self._timer = Timer()
+        self._experimentTimer = Timer()
+        self._waitTimer = Timer()
+        self.waitTime = 0
+        self._lastWaitTime = 0
+        self.errorTimer = Timer()
+        self.lastWaitError = 0
+        self.errorDerivative = 0
 
     def pause(self):
         self._paused = True
@@ -200,22 +211,50 @@ class Experiment(Thread):
 
             self.filePathStringVar.after(0, func=retry)
 
+    def _updateGraph(self, t, targetVoltage):
+        self.graph.addTo(0, t, targetVoltage)
+        self.graph.addTo(1, t, self.powerSupply.getVoltage())
+        self.graph.addTo(2, t, self.powerSupply.getCurrent())
+        self.graph.addTo(3, t, self.powerSupply.getPower())
+
     def runAuto(self):
         self.graph.wipeAll()
-        self._timer.reset()
+        self._experimentTimer.reset()
         self.progressBar.reset()
         self.progressReadout.update("0.00%")
+        self._waitTimer.reset()
+        self.errorTimer.reset()
         for targetVoltage, waitTime in self.profile:
+
+            self._waitTimer.reset()
             while self._paused or self.manualControlEnabled:
+                self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), targetVoltage)
                 time.sleep(0.01)
-            time.sleep(waitTime)
+
+            dt = self.errorTimer.elapsedTimeSeconds()
+
+            estimatedError = self.errorDerivative * dt + self.lastWaitError
+
+            timeToWait = max(0, waitTime + estimatedError)
+
+            self._waitTimer.reset()
+            time.sleep(timeToWait)
+            waitError = waitTime - self._waitTimer.elapsedTimeSeconds()
+            if dt==0:
+                self.errorDerivative = 0
+            else:
+                self.errorDerivative = (waitError - self.lastWaitError) / dt
+            self.errorTimer.reset()
+            self.lastWaitError = waitError
+
             if not self._active:
                 break
-            self.targetVoltage = max(targetVoltage, 0.0)
+            targetVoltage = max(targetVoltage, 0)
+            self.targetVoltage = targetVoltage
             self.powerSupply.setVoltage(self.targetVoltage)
             self.progressBar.update(self.profile.getProgress())
             self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
-            self.graph.addTo(0, self._timer.elapsedTimeSeconds(), targetVoltage)
+            self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), targetVoltage)
 
     def runManual(self):
         pass

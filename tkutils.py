@@ -10,7 +10,7 @@ window = tk.Tk()
 
 GRAY = "#1f1f01"
 BLUE = "#7cdcfe"
-DEFAULT_FONT = ("Microsoft New Tai Lue", 14, "bold")
+DEFAULT_FONT = ("Source Code Pro", 13, "normal")
 
 DEFAULT_BUTTON = {
     "borderwidth": 0,
@@ -22,7 +22,7 @@ DEFAULT_BUTTON = {
 }
 
 DEFAULT_MENU_BUTTON = {
-    "font": ("Microsoft New Tai Lue", 13, "bold"),
+    "font": (DEFAULT_FONT[0], DEFAULT_FONT[1] - 1, DEFAULT_FONT[2]),
     "background": BLUE,
     "fg": GRAY,
     "activebackground": GRAY,

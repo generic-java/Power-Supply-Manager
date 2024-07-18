@@ -144,6 +144,7 @@ class Experiment(Thread):
         self.actualCurrentReadout = kwargs["actualCurrentReadout"]
         self.powerReadout = kwargs["powerReadout"]
         self._onFinish = kwargs["onFinish"]
+        self.graph = kwargs["graph"]
         self.startTimestamp = 0
         self.elapsedTime = 0
         self._active = False
@@ -154,6 +155,7 @@ class Experiment(Thread):
         self.manualControlEnabled = False
         self.profile = Profile(self.filePathStringVar, Profile.EVENLY_SPACED, self.runTimeStringVar)
         self.targetVoltage = 0
+        self._timer = Timer()
 
     def pause(self):
         self._paused = True
@@ -199,6 +201,8 @@ class Experiment(Thread):
             self.filePathStringVar.after(0, func=retry)
 
     def runAuto(self):
+        self.graph.wipeAll()
+        self._timer.reset()
         self.progressBar.reset()
         self.progressReadout.update("0.00%")
         for targetVoltage, waitTime in self.profile:
@@ -211,6 +215,7 @@ class Experiment(Thread):
             self.powerSupply.setVoltage(self.targetVoltage)
             self.progressBar.update(self.profile.getProgress())
             self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
+            self.graph.addTo(0, self._timer.elapsedTimeSeconds(), targetVoltage)
 
     def runManual(self):
         pass

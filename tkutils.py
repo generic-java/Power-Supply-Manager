@@ -1,5 +1,6 @@
 import sys
 import time
+import tkinter
 import tkinter as tk
 from threading import Thread
 
@@ -10,12 +11,6 @@ window = tk.Tk()
 GRAY = "#1f1f01"
 BLUE = "#7cdcfe"
 DEFAULT_FONT = ("Microsoft New Tai Lue", 14, "bold")
-
-MATPLOTLIB_TICK_FONT = {
-    "fontfamily": "Microsoft New Tai Lue",
-    "fontweight": "normal",
-    "fontsize": 10
-}
 
 DEFAULT_BUTTON = {
     "borderwidth": 0,
@@ -341,12 +336,16 @@ class ProgressBar(Thread):
 
     def run(self):
         while True:
-            self._displayedProgress += (self._progressPercent - self._displayedProgress) / 10
-            if self._lastDisplayedProgress > self._displayedProgress:
-                self.bar.delete("all")
-            self.bar.create_rectangle((0, 0), (self._displayedProgress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
-            self._lastDisplayedProgress = self._displayedProgress
-            time.sleep(0.04)
+            try:
+                self._displayedProgress += (self._progressPercent - self._displayedProgress) / 10
+                if self._lastDisplayedProgress > self._displayedProgress:
+                    self.bar.delete("all")
+                self.bar.create_rectangle((0, 0), (self._displayedProgress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
+                self._lastDisplayedProgress = self._displayedProgress
+            except tkinter.TclError:
+                pass
+            finally:
+                time.sleep(0.04)
 
 
 class Readout:

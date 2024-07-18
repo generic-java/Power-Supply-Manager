@@ -11,13 +11,11 @@ from tkinter import messagebox
 from tkinter.filedialog import askdirectory
 from tkinter.filedialog import askopenfilename
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
+from graph import Graph
 from powersupplyexp import PowerSupply, Experiment, killActiveExperiment, pauseActiveExperiment, getActiveExperiment
 from tkutils import *
 
-windowSize = (1300, 800)
+windowSize = (1700, 900)
 
 DEFAULT_SETTINGS = {
     "machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR",
@@ -75,7 +73,8 @@ def main():
             "actualVoltageReadout": actualVoltageReadout,
             "actualCurrentReadout": actualCurrentReadout,
             "powerReadout": powerReadout,
-            "onFinish": onExperimentEnd
+            "onFinish": onExperimentEnd,
+            "graph": graph
         }
         Experiment(**experimentSettings).start()
         window.after(50, lambda: stopButtonFrame.grid(row=0, column=1))
@@ -110,8 +109,8 @@ def main():
             os.mkdir(settingsDir)
         with open(f"{settingsDir}/{settingsFileName}", "w") as file:
             toSave = DEFAULT_SETTINGS.copy()
-            if machineAddr.get()!="":
-                toSave["machineAddress"] = machineAddr.get()
+            if machineAddress.get()!="":
+                toSave["machineAddress"] = machineAddress.get()
             if os.path.isfile(filePath.get()):
                 toSave["fileURI"] = filePath.get()
             if os.path.exists(folderPath.get()):
@@ -150,8 +149,8 @@ def main():
     # End region
 
     # Region machine address chooser
-    machineAddrChooserContainer, machineAddr = labelEntryGroup(textConfigFrame, settings["machineAddress"], 78, "Machine address")
-    makeTextWidget("Button", machineAddrChooserContainer, "Connect", command=lambda: newPowerSupply(machineAddr.get())).grid(row=0, column=2, padx=20)
+    machineAddrChooserContainer, machineAddress = labelEntryGroup(textConfigFrame, settings["machineAddress"], 78, "Machine address")
+    makeTextWidget("Button", machineAddrChooserContainer, "Connect", command=lambda: newPowerSupply(machineAddress.get())).grid(row=0, column=2, padx=20)
     machineAddrChooserContainer.config(pady=20, background=GRAY)
     machineAddrChooserContainer.place(relx=0, y=50, anchor=tk.W)
 
@@ -290,17 +289,11 @@ def main():
     centerFrame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
     # Region matplotlib graph
-    figure = plt.figure(figsize=(10, 5), facecolor=GRAY)
-    ax = figure.add_subplot()
-    ax.tick_params(colors=BLUE)
-    plt.xticks(**MATPLOTLIB_TICK_FONT)
-    plt.yticks(**MATPLOTLIB_TICK_FONT)
-    canvas = FigureCanvasTkAgg(figure, master=window)
-    canvas.draw()
-    canvas.get_tk_widget().place(relx=0.5, rely=1, anchor=tk.S)
-    # End region
 
-    window.after(25, lambda: newPowerSupply(machineAddr.get()))
+    # End region
+    graph = Graph(window, 4)
+    graph.getWidget().place(relx=0.5, rely=1, anchor=tk.S)
+    window.after(100, lambda: newPowerSupply(machineAddress.get()))
 
     window.mainloop()
     saveSettings()

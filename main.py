@@ -291,7 +291,7 @@ def main():
     # Region matplotlib graph
 
     # End region
-    graph = Graph(window, 4, ["Target voltage", "Actual voltage", "Current", "Power"])
+    graph = Graph(window, 4, ["Target voltage", "Actual voltage", "Current (A)", "Power (W)"])
     graph.getWidget().place(relx=0.5, rely=1, anchor=tk.S)
     window.after(100, lambda: newPowerSupply(machineAddress.get()))
 

@@ -31,15 +31,28 @@ def killActiveExperiment():
 class Timer:
     def __init__(self):
         self.startTimestamp = time.time()
+        self._paused = False
+        self._onPauseElapsedTime = 0
 
     def reset(self):
         self.startTimestamp = time.time()
 
     def elapsedTimeSeconds(self):
-        return time.time() - self.startTimestamp
+        if self._paused:
+            return self._onPauseElapsedTime
+        else:
+            return time.time() - self.startTimestamp
 
     def elapsedTimeMillis(self):
         return self.elapsedTimeSeconds() / 1000
+
+    def pause(self):
+        self._paused = True
+        self._onPauseElapsedTime = self.elapsedTimeSeconds()
+
+    def unpause(self):
+        self._paused = False
+        self.startTimestamp = time.time() - self._onPauseElapsedTime
 
 
 class PIDController:
@@ -86,6 +99,7 @@ class Profile:
         self.profileType = profileType
         self.totalTestTime = totalTestTime
         self.points = []
+        self.scheduledTimes = []
 
     def _readCSV(self, path: str):
         data = []
@@ -111,6 +125,10 @@ class Profile:
     def __iter__(self):
         self.index = -1
         self._readCSV(self.profileFilePath.get())
+        self.scheduledTimes = []
+        if self.profileType==Profile.EVENLY_SPACED:
+            for i in range(len(self.points)):
+                self.scheduledTimes.append(self.timePerPoint * i)
         return self
 
     def __next__(self):
@@ -119,16 +137,12 @@ class Profile:
             if self.profileType==Profile.ORDERED_PAIRS:
                 return self.points[self.index]
             else:
-                return self.points[self.index][0], self.timePerPoint
+                return self.points[self.index][0], self.scheduledTimes[self.index]
         else:
             raise StopIteration
 
 
 class Experiment(Thread):
-    MIN_WAIT_TIME: float = 0.001
-    """
-    If an experiment instance is waiting to switch to the next profile point and has less than the minimum wait time, it will move to the next point without sleeping for the entire duration.  This will increase the time accuracy of the experiment
-    """
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -167,6 +181,9 @@ class Experiment(Thread):
         self.errorTimer = Timer()
         self.lastWaitError = 0
         self.errorDerivative = 0
+        self._waitOffset = 0
+        self._waitOffsets = []
+        self._timer = Timer()
 
     def pause(self):
         self._paused = True
@@ -188,6 +205,9 @@ class Experiment(Thread):
                 self.actualCurrentReadout.update("{:.3f}".format(self.powerSupply.getCurrent()))
                 self.powerReadout.update("{:.3f}".format(self.powerSupply.getPower()))
                 self.data.append([self.elapsedTime, self.powerSupply.getTargetVoltage(), self.powerSupply.getVoltage(), self.powerSupply.getCurrent(), self.powerSupply.getPower()])
+                self.progressBar.update(self.profile.getProgress())
+                self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
+                self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), self.targetVoltage)
             time.sleep(0.05)  # To free up CPU time
 
     def _saveExperimentData(self):
@@ -224,37 +244,20 @@ class Experiment(Thread):
         self.progressReadout.update("0.00%")
         self._waitTimer.reset()
         self.errorTimer.reset()
-        for targetVoltage, waitTime in self.profile:
-
-            self._waitTimer.reset()
+        self._timer.reset()
+        for targetVoltage, scheduledTime in self.profile:
             while self._paused or self.manualControlEnabled:
-                self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), targetVoltage)
                 time.sleep(0.01)
 
-            dt = self.errorTimer.elapsedTimeSeconds()
+            while self._timer.elapsedTimeSeconds() < scheduledTime:
+                time.sleep(0.001)
 
-            estimatedError = self.errorDerivative * dt + self.lastWaitError
-
-            timeToWait = max(0, waitTime + estimatedError)
-
-            self._waitTimer.reset()
-            time.sleep(timeToWait)
-            waitError = waitTime - self._waitTimer.elapsedTimeSeconds()
-            if dt==0:
-                self.errorDerivative = 0
-            else:
-                self.errorDerivative = (waitError - self.lastWaitError) / dt
-            self.errorTimer.reset()
-            self.lastWaitError = waitError
+            self.targetVoltage = targetVoltage
+            self.powerSupply.setVoltage(self.targetVoltage)
 
             if not self._active:
                 break
-            targetVoltage = max(targetVoltage, 0)
-            self.targetVoltage = targetVoltage
-            self.powerSupply.setVoltage(self.targetVoltage)
-            self.progressBar.update(self.profile.getProgress())
-            self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
-            self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), targetVoltage)
+
 
     def runManual(self):
         pass

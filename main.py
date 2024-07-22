@@ -5,6 +5,7 @@ Program: Wright Scholars
 Mentor: Dr. Steve Adams
 Location: Wright-Patterson Air Force Base
 """
+
 import json
 import os
 from tkinter import messagebox
@@ -12,10 +13,16 @@ from tkinter.filedialog import askdirectory
 from tkinter.filedialog import askopenfilename
 
 from graph import Graph
-from power_supply_experiment import PowerSupply, Experiment, killActiveExperiment, pauseActiveExperiment, getActiveExperiment
+from power_supply_experiment import (
+    PowerSupply,
+    Experiment,
+    kill_active_experiment,
+    pauseActiveExperiment,
+    getActiveExperiment,
+)
 from tkutils import *
 
-windowSize = (1700, 900)
+window_size = (1700, 900)
 
 DEFAULT_SETTINGS = {
     "machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR",
@@ -24,280 +31,342 @@ DEFAULT_SETTINGS = {
     "profileType": "Evenly spaced",
     "controlType": 0,
     "testTime": 10,
-    "resetVoltage": True
+    "resetVoltage": True,
 }
-settingsDir = "./settings"
-settingsFileName = "settings.json"
+settings_dir = "./settings"
+settings_file_name = "settings.json"
 
-currentLimit = 30
+current_limit = 30
 
 
 def main():
-    def newPowerSupply(addr: str):
-        powerSupply = PowerSupply(addr, autoConnect=False)
+    def new_power_supply(addr: str):
+        power_supply = PowerSupply(addr, auto_connect=False)
 
-        def onConnect():
-            window.after(0, lambda: connectionStatus.set(f"Connected to {powerSupply.getIDN()}"))
-            powerSupply.applyCurrentLimit(currentLimit)
-            powerSupply.setCurrent(currentLimit)
+        def on_connect():
+            window.after(
+                0,
+                lambda: connection_status.set(f"Connected to {power_supply.get_idn()}"),
+            )
+            power_supply.apply_current_limit(current_limit)
+            power_supply.set_current(current_limit)
 
-        def onDisconnect():
-            window.after(0, lambda: connectionStatus.set("Disconnected"))
+        def on_disconnect():
+            window.after(0, lambda: connection_status.set("Disconnected"))
 
-        onDisconnect()
-        powerSupply.onConnect(onConnect)
-        powerSupply.onDisconnect(onDisconnect)
-        powerSupply.tryConnect()
+        on_disconnect()
+        power_supply.on_connect(on_connect)
+        power_supply.on_disconnect(on_disconnect)
+        power_supply.try_connect()
 
-
-    def startNewExperiment():
-        if not os.path.isfile(filePath.get()):
-            if messagebox.askretrycancel("Invalid path", icon=messagebox.ERROR, message="The experiment could not be started because the provided path to the setpoint file is invalid."):
-                filePath.set(askopenfilename(filetypes=[("CSV Files", ".csv")]))
-                startNewExperiment()
+    def start_new_experiment():
+        if not os.path.isfile(file_path.get()):
+            if messagebox.askretrycancel(
+                    "Invalid path",
+                    icon=messagebox.ERROR,
+                    message="The experiment could not be started because the provided path to the setpoint file is invalid.",
+            ):
+                file_path.set(askopenfilename(filetypes=[("CSV Files", ".csv")]))
+                start_new_experiment()
             return
         try:
-            float(timeInput.get())
+            float(time_input.get())
         except ValueError:
-            messagebox.showerror("Invalid run time", message="The provided value for the experiment run time is not a number.")
+            messagebox.showerror(
+                "Invalid run time",
+                message="The provided value for the experiment run time is not a number.",
+            )
             return
-        experimentSettings = {
-            "filePathStringVar": filePath,
-            "folderPathStringVar": folderPath,
-            "runTimeStringVar": timeInput,
-            "endAtZeroBoolVar": resetVoltage,
-            "voltageReadout": targetVoltageReadout,
-            "timeReadout": elapsedTimeReadout,
-            "progressReadout": progressReadout,
-            "progressBar": progressBar,
-            "actualVoltageReadout": actualVoltageReadout,
-            "actualCurrentReadout": actualCurrentReadout,
-            "powerReadout": powerReadout,
-            "onFinish": onExperimentEnd,
-            "graph": graph
+        experiment_settings = {
+            "filePathStringVar": file_path,
+            "folderPathStringVar": folder_path,
+            "runTimeStringVar": time_input,
+            "endAtZeroBoolVar": reset_voltage,
+            "voltageReadout": target_voltage_readout,
+            "timeReadout": elapsed_time_readout,
+            "progress_readout": progress_readout,
+            "progress_bar": progress_bar,
+            "actual_voltage_readout": actual_voltage_readout,
+            "actual_current_readout": actual_current_readout,
+            "power_readout": power_readout,
+            "onFinish": on_experiment_end,
+            "graph": graph,
         }
-        Experiment(**experimentSettings).start()
-        window.after(50, lambda: stopButtonFrame.grid(row=0, column=1))
-        progressFrame.grid(row=0, column=1)
+        Experiment(**experiment_settings).start()
+        window.after(50, lambda: stop_button_frame.grid(row=0, column=1))
+        progress_frame.grid(row=0, column=1)
 
-    def manageActiveExperiment(playing: bool):
+    def manage_active_experiment(playing: bool):
         if playing:
             pauseActiveExperiment()
         else:
-            activeExperiment = getActiveExperiment()
-            if activeExperiment is not None:
-                if activeExperiment.isActive():
-                    activeExperiment.unpause()
+            active_experiment = getActiveExperiment()
+            if active_experiment is not None:
+                if active_experiment.is_active():
+                    active_experiment.unpause()
                 else:
-                    startNewExperiment()
+                    start_new_experiment()
             else:
-                startNewExperiment()
+                start_new_experiment()
 
-    def stopExperiment():
-        startExperimentButton.setState(on=True)
-        killActiveExperiment()
-        stopButtonFrame.grid_forget()
-        progressFrame.grid_forget()
+    def stop_experiment():
+        start_experiment_button.setState(on=True)
+        kill_active_experiment()
+        stop_button_frame.grid_forget()
+        progress_frame.grid_forget()
 
-    def onExperimentEnd():
-        startExperimentButton.setState(on=True)
-        stopButtonFrame.grid_forget()
+    def on_experiment_end():
+        start_experiment_button.setState(on=True)
+        stop_button_frame.grid_forget()
 
-
-    def saveSettings():
-        if not os.path.isdir(settingsDir):
-            os.mkdir(settingsDir)
-        with open(f"{settingsDir}/{settingsFileName}", "w") as file:
-            toSave = DEFAULT_SETTINGS.copy()
-            if machineAddress.get()!="":
-                toSave["machineAddress"] = machineAddress.get()
-            if os.path.isfile(filePath.get()):
-                toSave["fileURI"] = filePath.get()
-            if os.path.exists(folderPath.get()):
-                toSave["dataStoragePath"] = folderPath.get()
-            toSave["profileType"] = profileMenu.getSelectedOption()
-            toSave["controlType"] = controlTypeToggle.getHighlightedButton()
+    def save_settings():
+        if not os.path.isdir(settings_dir):
+            os.mkdir(settings_dir)
+        with open(f"{settings_dir}/{settings_file_name}", "w") as file:
+            to_save = DEFAULT_SETTINGS.copy()
+            if machine_address.get() != "":
+                to_save["machineAddress"] = machine_address.get()
+            if os.path.isfile(file_path.get()):
+                to_save["fileURI"] = file_path.get()
+            if os.path.exists(folder_path.get()):
+                to_save["dataStoragePath"] = folder_path.get()
+            to_save["profileType"] = profile_menu.get_selected_option()
+            to_save["controlType"] = control_type_toggle.get_highlighted_button()
             try:
-                float(timeInput.get())
-                toSave["testTime"] = timeInput.get()
+                float(time_input.get())
+                to_save["testTime"] = time_input.get()
             finally:
-                toSave["resetVoltage"] = resetVoltage.get()
-            json.dump(toSave, file)
+                to_save["resetVoltage"] = reset_voltage.get()
+            json.dump(to_save, file)
 
-    def loadSettings():
+    def load_settings():
         try:
-            with open(f"{settingsDir}/{settingsFileName}", "r") as file:
+            with open(f"{settings_dir}/{settings_file_name}", "r") as file:
                 return json.load(file)
         except (json.JSONDecodeError, FileNotFoundError):
             return DEFAULT_SETTINGS
 
-    settings = loadSettings()
+    settings = load_settings()
 
-    window.geometry(f"{windowSize[0]}x{windowSize[1]}")
-    window.minsize(windowSize[0], windowSize[1])
+    window.geometry(f"{window_size[0]}x{window_size[1]}")
+    window.minsize(window_size[0], window_size[1])
     window.config(background=GRAY)
     window.iconbitmap("./images/icon.ico")
     window.title("Power Supply Manager")
 
-    centerFrame = tk.Frame(window, width=1300, height=800, background=GRAY)
+    center_frame = tk.Frame(window, width=1300, height=800, background=GRAY)
 
-    textConfigFrame = tk.Frame(window, width=1400, height=800, padx=20, background=GRAY)
+    text_config_frame = tk.Frame(
+        window, width=1400, height=800, padx=20, background=GRAY
+    )
 
     # Region connection status
-    connectionStatus = tk.StringVar()
-    connectionStatus.set("Disconnected")
+    connection_status = tk.StringVar()
+    connection_status.set("Disconnected")
     # End region
 
     # Region machine address chooser
-    machineAddrChooserContainer, machineAddress = labelEntryGroup(textConfigFrame, settings["machineAddress"], 78, "Machine address")
-    makeTextWidget("Button", machineAddrChooserContainer, "Connect", command=lambda: newPowerSupply(machineAddress.get())).grid(row=0, column=2, padx=20)
-    machineAddrChooserContainer.config(pady=20, background=GRAY)
-    machineAddrChooserContainer.place(relx=0, y=50, anchor=tk.W)
+    machine_addr_chooser_container, machine_address = label_entry_group(
+        text_config_frame, settings["machineAddress"], 78, "Machine address"
+    )
+    make_text_widget(
+        "Button",
+        machine_addr_chooser_container,
+        "Connect",
+        command=lambda: new_power_supply(machine_address.get()),
+    ).grid(row=0, column=2, padx=20)
+    machine_addr_chooser_container.config(pady=20, background=GRAY)
+    machine_addr_chooser_container.place(relx=0, y=50, anchor=tk.W)
 
     # End region
 
     # Region data location chooser
-    def setFolderPath():
+    def set_folder_path():
         directory = askdirectory()
-        if directory!="":
-            folderPath.set(directory)
+        if directory != "":
+            folder_path.set(directory)
 
-    folderChooserContainer, folderPath = labelEntryGroup(textConfigFrame, settings["dataStoragePath"], 70, "Data storage location")
-    makeTextWidget("Button", folderChooserContainer, "Choose folder", command=lambda: setFolderPath()).grid(row=0, column=2, padx=20)
-    folderChooserContainer.config(pady=20, background=GRAY)
-    folderChooserContainer.place(relx=0, y=125, anchor=tk.W)
+    folder_chooser_container, folder_path = label_entry_group(
+        text_config_frame, settings["dataStoragePath"], 70, "Data storage location"
+    )
+    make_text_widget(
+        "Button",
+        folder_chooser_container,
+        "Choose folder",
+        command=lambda: set_folder_path(),
+    ).grid(row=0, column=2, padx=20)
+    folder_chooser_container.config(pady=20, background=GRAY)
+    folder_chooser_container.place(relx=0, y=125, anchor=tk.W)
 
     # End region
 
     # Region file chooser
-    def setFilePath():
+    def set_file_path():
         directory = askopenfilename(filetypes=[("CSV Files", ".csv")])
-        if directory!="":
-            filePath.set(directory)
+        if directory != "":
+            file_path.set(directory)
 
-    fileChooserContainer, filePath = labelEntryGroup(textConfigFrame, settings["fileURI"], 77, "Profile file path")
-    makeTextWidget("Button", fileChooserContainer, "Choose file", command=setFilePath).grid(row=0, column=2, padx=20)
-    fileChooserContainer.config(pady=20, background=GRAY)
-    fileChooserContainer.place(relx=0, y=200, anchor=tk.W)
+    file_chooser_container, file_path = label_entry_group(
+        text_config_frame, settings["fileURI"], 77, "Profile file path"
+    )
+    make_text_widget(
+        "Button", file_chooser_container, "Choose file", command=set_file_path
+    ).grid(row=0, column=2, padx=20)
+    file_chooser_container.config(pady=20, background=GRAY)
+    file_chooser_container.place(relx=0, y=200, anchor=tk.W)
 
     # End region
 
     # Region profile managing widgets
-    @simpleTKCallback
-    def toggleTimeInputVisibility():
-        if profileMenu.getSelectedOption()=="Evenly spaced":
-            timeInputContainer.grid(row=0, column=2)
+    @simple_tk_callback
+    def toggle_time_input_visibility():
+        if profile_menu.get_selected_option() == "Evenly spaced":
+            time_input_container.grid(row=0, column=2)
         else:
-            timeInputContainer.grid_forget()
+            time_input_container.grid_forget()
 
-    profileManagerFrame, profileMenu = labelMenuGroup(textConfigFrame, "Profile type", *["Evenly spaced", "Ordered pairs"])
+    profile_manager_frame, profile_menu = label_menu_group(
+        text_config_frame, "Profile type", *["Evenly spaced", "Ordered pairs"]
+    )
 
-    timeInputContainer, timeInput = labelEntryGroup(profileManagerFrame, settings["testTime"], 4, "Test time (s)")
-    timeInputContainer.config(background=GRAY)
+    time_input_container, time_input = label_entry_group(
+        profile_manager_frame, settings["testTime"], 4, "Test time (s)"
+    )
+    time_input_container.config(background=GRAY)
 
-    profileMenu.onOptionSelect(toggleTimeInputVisibility)
-    profileMenu.selectOption(settings["profileType"])
-    profileManagerFrame.config(background=GRAY)
-    profileManagerFrame.place(relx=0, y=250)
+    profile_menu.on_option_select(toggle_time_input_visibility)
+    profile_menu.select_option(settings["profileType"])
+    profile_manager_frame.config(background=GRAY)
+    profile_manager_frame.place(relx=0, y=250)
     # End region
 
     # Region reset voltage switch
-    checkContainer, resetVoltage = labelSwitchGroup(profileManagerFrame, "Set voltage to zero at experiment end")
-    resetVoltage.set(bool(settings["resetVoltage"]))
-    checkContainer.config(background=GRAY)
-    checkContainer.grid(row=0, column=3)
+    check_container, reset_voltage = label_switch_group(
+        profile_manager_frame, "Set voltage to zero at experiment end"
+    )
+    reset_voltage.set(bool(settings["resetVoltage"]))
+    check_container.config(background=GRAY)
+    check_container.grid(row=0, column=3)
     # End region
 
     # Region target power input
-    targetPowerContainer, targetPowerInput = labelEntryGroup(textConfigFrame, 0, 4, "Target power (W)")
-    targetPowerContainer.config(background=GRAY)
+    target_power_container, target_power_input = label_entry_group(
+        text_config_frame, 0, 4, "Target power (W)"
+    )
+    target_power_container.config(background=GRAY)
 
     # Region play, pause, and stop buttons
-    experimentManagerFrame = tk.Frame(textConfigFrame, background=GRAY)
+    experiment_manager_frame = tk.Frame(text_config_frame, background=GRAY)
 
-    controlButtonFrame = tk.Frame(experimentManagerFrame, height=50, background=GRAY, padx=20)
-    stopButtonFrame = tk.Frame(controlButtonFrame, background=GRAY)
+    control_button_frame = tk.Frame(
+        experiment_manager_frame, height=50, background=GRAY, padx=20
+    )
+    stop_button_frame = tk.Frame(control_button_frame, background=GRAY)
 
-    startExperimentButton = Switch(controlButtonFrame, switchType=PLAY_PAUSE, onswitch=manageActiveExperiment)
-    stopExperimentButton = makeImgButton(stopButtonFrame, "images/stop.PNG", (50, 50), command=stopExperiment)
-    spacer(stopButtonFrame, 20).grid(row=0, column=0)
-    stopExperimentButton.grid(row=0, column=1)
+    start_experiment_button = Switch(
+        control_button_frame, switch_type=PLAY_PAUSE, onswitch=manage_active_experiment
+    )
+    stop_experiment_button = make_img_button(
+        stop_button_frame, "images/stop.PNG", (50, 50), command=stop_experiment
+    )
+    spacer(stop_button_frame, 20).grid(row=0, column=0)
+    stop_experiment_button.grid(row=0, column=1)
 
-    startExperimentButton.button.grid(row=0, column=0)
-    controlButtonFrame.grid(row=0, column=0)
+    start_experiment_button.button.grid(row=0, column=0)
+    control_button_frame.grid(row=0, column=0)
 
-    progressFrame = tk.Frame(experimentManagerFrame, background=GRAY)
-    progressLabel = makeTextWidget("Label", progressFrame, "Progress")
-    progressBar = ProgressBar(progressFrame, (300, 25), animated=True)
-    progressReadout = Readout(tk.StringVar(), tk.Label(progressFrame, padx=20), "")
-    progressLabel.grid(row=0, column=0)
-    spacer(progressFrame, 20).grid(row=0, column=1)
-    progressBar.bar.grid(row=0, column=2)
-    progressReadout.getLabel().grid(row=0, column=3)
+    progress_frame = tk.Frame(experiment_manager_frame, background=GRAY)
+    progress_label = make_text_widget("Label", progress_frame, "Progress")
+    progress_bar = ProgressBar(progress_frame, (300, 25), animated=True)
+    progress_readout = Readout(tk.StringVar(), tk.Label(progress_frame, padx=20), "")
+    progress_label.grid(row=0, column=0)
+    spacer(progress_frame, 20).grid(row=0, column=1)
+    progress_bar.bar.grid(row=0, column=2)
+    progress_readout.get_label().grid(row=0, column=3)
 
     # End region
-    def toggleTargetPowerVisibility(highlighted: int):
-        if highlighted==0:
-            targetPowerContainer.place_forget()
-            experimentManagerFrame.place(x=0, y=440, anchor=tk.W)
+    def toggle_target_power_visibility(highlighted: int):
+        if highlighted == 0:
+            target_power_container.place_forget()
+            experiment_manager_frame.place(x=0, y=440, anchor=tk.W)
         else:
-            targetPowerContainer.place(x=400, y=350, anchor=tk.W)
-            experimentManagerFrame.place_forget()
-            startExperimentButton.setState(on=True)
+            target_power_container.place(x=400, y=350, anchor=tk.W)
+            experiment_manager_frame.place_forget()
+            start_experiment_button.setState(on=True)
 
     # End region
 
     # Region control type chooser
-    controlTypeToggle = HighlightedButtonPair(textConfigFrame, "Automatic control", "Manual control", onSwitch=toggleTargetPowerVisibility)
-    controlTypeToggle.select(settings["controlType"])
-    controlTypeToggle.frame.place(x=20, y=350, anchor=tk.W)
+    control_type_toggle = HighlightedButtonPair(
+        text_config_frame,
+        "Automatic control",
+        "Manual control",
+        onSwitch=toggle_target_power_visibility,
+    )
+    control_type_toggle.select(settings["controlType"])
+    control_type_toggle.frame.place(x=20, y=350, anchor=tk.W)
     # End region
 
-
     # Region progress readout
-    progressReadoutContainer = tk.Frame(centerFrame, width=700, height=100, background=GRAY)
+    progress_readout_container = tk.Frame(
+        center_frame, width=700, height=100, background=GRAY
+    )
 
-    targetVoltageReadout = Readout(tk.StringVar(), tk.Label(progressReadoutContainer, padx=20), "Target voltage: ")
-    targetVoltageReadout.getLabel().grid(row=0, column=0)
+    target_voltage_readout = Readout(
+        tk.StringVar(),
+        tk.Label(progress_readout_container, padx=20),
+        "Target voltage: ",
+    )
+    target_voltage_readout.get_label().grid(row=0, column=0)
 
-    elapsedTimeReadout = Readout(tk.StringVar(), tk.Label(progressReadoutContainer, padx=20), "Elapsed time: ")
-    elapsedTimeReadout.getLabel().grid(row=0, column=1)
+    elapsed_time_readout = Readout(
+        tk.StringVar(), tk.Label(progress_readout_container, padx=20), "Elapsed time: "
+    )
+    elapsed_time_readout.get_label().grid(row=0, column=1)
 
-    progressReadoutContainer.place(relx=0.5, y=550, anchor=tk.CENTER)
+    progress_readout_container.place(relx=0.5, y=550, anchor=tk.CENTER)
     # End region
 
     # Region experiment readout
-    expReadoutContainer = tk.Frame(centerFrame, width=700, height=100)
+    exp_readout_container = tk.Frame(center_frame, width=700, height=100)
 
-    actualVoltageReadout = Readout(tk.StringVar(), tk.Label(expReadoutContainer, padx=20), "Actual voltage: ")
-    actualVoltageReadout.getLabel().grid(row=0, column=0)
+    actual_voltage_readout = Readout(
+        tk.StringVar(), tk.Label(exp_readout_container, padx=20), "Actual voltage: "
+    )
+    actual_voltage_readout.get_label().grid(row=0, column=0)
 
-    actualCurrentReadout = Readout(tk.StringVar(), tk.Label(expReadoutContainer, padx=20), "Current: ")
-    actualCurrentReadout.getLabel().grid(row=0, column=1)
+    actual_current_readout = Readout(
+        tk.StringVar(), tk.Label(exp_readout_container, padx=20), "Current: "
+    )
+    actual_current_readout.get_label().grid(row=0, column=1)
 
-    powerReadout = Readout(tk.StringVar(), tk.Label(expReadoutContainer, padx=20), "Power (W): ")
-    powerReadout.getLabel().grid(row=0, column=2)
+    power_readout = Readout(
+        tk.StringVar(), tk.Label(exp_readout_container, padx=20), "Power (W): "
+    )
+    power_readout.get_label().grid(row=0, column=2)
 
-    expReadoutContainer.place(relx=0.5, y=650, anchor=tk.CENTER)
+    exp_readout_container.place(relx=0.5, y=650, anchor=tk.CENTER)
     # End region
 
     # Region connection status
-    tk.Label(centerFrame, textvariable=connectionStatus, **DEFAULT_LABEL).place(relx=0.5, y=750, anchor=tk.CENTER)
+    tk.Label(center_frame, textvariable=connection_status, **DEFAULT_LABEL).place(
+        relx=0.5, y=750, anchor=tk.CENTER
+    )
     # End region
 
-    textConfigFrame.place(x=0, y=0, anchor=tk.NW)
-    centerFrame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+    text_config_frame.place(x=0, y=0, anchor=tk.NW)
+    center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
     # Region matplotlib graph
 
     # End region
     graph = Graph(window, 4, ["Target voltage", "Actual voltage", "Current", "Power"])
-    graph.getWidget().place(relx=0.5, rely=1, anchor=tk.S)
-    window.after(100, lambda: newPowerSupply(machineAddress.get()))
+    graph.get_widget().place(relx=0.5, rely=1, anchor=tk.S)
+    window.after(100, lambda: new_power_supply(machine_address.get()))
 
     window.mainloop()
-    saveSettings()
+    save_settings()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

@@ -13,11 +13,11 @@ _active_exp = None
 _active_power_supply = None
 
 
-def getActiveExperiment():
+def get_active_experiment():
     return _active_exp
 
 
-def pauseActiveExperiment():
+def pause_active_experiment():
     if _active_exp is not None:
         _active_exp.pause()
 
@@ -31,15 +31,28 @@ def kill_active_experiment():
 class Timer:
     def __init__(self):
         self.start_timestamp = time.time()
+        self._paused = False
+        self._elapsed_time_on_pause = 0
 
     def reset(self):
         self.start_timestamp = time.time()
 
-    def elapsedTimeSeconds(self):
-        return time.time() - self.start_timestamp
+    def elapsed_time_seconds(self):
+        if self._paused:
+            return self._elapsed_time_on_pause
+        else:
+            return time.time() - self.start_timestamp
 
-    def elapsedTimeMillis(self):
-        return self.elapsedTimeSeconds() / 1000
+    def elapsed_time_millis(self):
+        return self.elapsed_time_seconds() / 1000
+
+    def pause(self):
+        self._elapsed_time_on_pause = self.elapsed_time_seconds()
+        self._paused = True
+
+    def unpause(self):
+        self._paused = False
+        self.start_timestamp = time.time() - self._elapsed_time_on_pause
 
 
 class PIDController:
@@ -86,35 +99,32 @@ class Profile:
     EVENLY_SPACED = 0
     ORDERED_PAIRS = 1
 
-    def __init__(
-            self,
-            profile_file_path: tkinter.StringVar,
-            profile_type: int,
-            total_test_time: tkinter.StringVar = 0,
-    ):
+    def __init__(self, profile_file_path: tkinter.StringVar, profile_type: int, total_test_time: tkinter.StringVar = 0):
         self.index = -1
         self.profile_file_path = profile_file_path
         self.profile_type = profile_type
         self.total_test_time = total_test_time
         self.points = []
+        self._scheduled_times = []
 
     def _read_csv(self, path: str):
         data = []
-        try:
-            with open(path, newline="") as csvfile:
-                reader = csv.reader(csvfile, delimiter=",", quotechar="|")
-                for row in reader:
-                    for i in range(len(row)):
-                        row[i] = float(row[i])
-                    data.append(row)
-                    if len(row) == 2 and self.profile_type == Profile.EVENLY_SPACED:
-                        raise AttributeError
-                    elif len(row) == 1 and self.profile_type == Profile.ORDERED_PAIRS:
-                        raise AttributeError
-                self.points = data
-                self.time_per_point = float(self.total_test_time.get()) / len(data)
-        except (AttributeError, ValueError):
-            pass  # TODO: add actual code here
+        # try:
+        with open(path, newline="") as csvfile:
+            reader = csv.reader(csvfile, delimiter=",", quotechar="|")
+            for row in reader:
+                for i in range(len(row)):
+                    row[i] = float(row[i])
+                data.append(row)
+                if len(row) == 2 and self.profile_type == Profile.EVENLY_SPACED:
+                    raise AttributeError
+                elif len(row) == 1 and self.profile_type == Profile.ORDERED_PAIRS:
+                    raise AttributeError
+            self.points = data
+            self.time_per_point = float(self.total_test_time.get()) / len(data)
+        # except (AttributeError, ValueError):
+        #   print("Invalid file")
+        #  pass  # TODO: add actual code here
 
     def get_progress(self):
         return max(self.index + 1, 0) / len(self.points)
@@ -122,6 +132,9 @@ class Profile:
     def __iter__(self):
         self.index = -1
         self._read_csv(self.profile_file_path.get())
+        if self.profile_type == Profile.EVENLY_SPACED:
+            for i in range(len(self.points)):
+                self._scheduled_times.append(self.time_per_point * i)
         return self
 
     def __next__(self):
@@ -130,7 +143,7 @@ class Profile:
             if self.profile_type == Profile.ORDERED_PAIRS:
                 return self.points[self.index]
             else:
-                return self.points[self.index][0], self.time_per_point
+                return self.points[self.index][0], self._scheduled_times[self.index]
         else:
             raise StopIteration
 
@@ -141,7 +154,7 @@ class Experiment(Thread):
         global _active_power_supply
         global _active_exp
         _active_exp = self
-        self.power_supply = _active_power_supply
+        self._power_supply = _active_power_supply
         self.run_time = 0
         self.file_path_string_var = kwargs["filePathStringVar"]
         self.folder_path = kwargs["folderPathStringVar"]
@@ -164,23 +177,17 @@ class Experiment(Thread):
         self.setpoints = []
         self._paused = False
         self.manualControlEnabled = False
-        self.profile = Profile(
-            self.file_path_string_var, Profile.EVENLY_SPACED, self.run_time_string_var
-        )
+        self.profile = Profile(self.file_path_string_var, Profile.EVENLY_SPACED, self.run_time_string_var)
         self.targetVoltage = 0
-        self._experimentTimer = Timer()
-        self._waitTimer = Timer()
-        self.waitTime = 0
-        self._lastWaitTime = 0
-        self.errorTimer = Timer()
-        self.lastWaitError = 0
-        self.errorDerivative = 0
+        self._timer = Timer()
 
     def pause(self):
         self._paused = True
+        self._timer.pause()
 
     def unpause(self):
         self._paused = False
+        self._timer.unpause()
 
     def _daemon(self):
         global _active_exp
@@ -195,19 +202,19 @@ class Experiment(Thread):
                     "{:.2f}".format(min(self.elapsed_time, self.run_time))
                 )
                 self.actual_voltage_readout.update(
-                    "{:.3f}".format(self.power_supply.get_voltage())
+                    "{:.3f}".format(self._power_supply.get_voltage())
                 )
                 self.actual_current_readout.update(
-                    "{:.3f}".format(self.power_supply.get_current())
+                    "{:.3f}".format(self._power_supply.get_current())
                 )
-                self.power_readout.update("{:.3f}".format(self.power_supply.get_power()))
+                self.power_readout.update("{:.3f}".format(self._power_supply.get_power()))
                 self.data.append(
                     [
                         self.elapsed_time,
-                        self.power_supply.get_target_voltage(),
-                        self.power_supply.get_voltage(),
-                        self.power_supply.get_current(),
-                        self.power_supply.get_power(),
+                        self._power_supply.get_target_voltage(),
+                        self._power_supply.get_voltage(),
+                        self._power_supply.get_current(),
+                        self._power_supply.get_power(),
                     ]
                 )
             time.sleep(0.05)  # To free up CPU time
@@ -248,56 +255,34 @@ class Experiment(Thread):
 
             self.file_path_string_var.after(0, func=retry)
 
-    def _update_graph(self, t, target_voltage):
-        self.graph.add_to(0, t, target_voltage)
-        self.graph.add_to(1, t, self.power_supply.get_voltage())
-        self.graph.add_to(2, t, self.power_supply.get_current())
-        self.graph.add_to(3, t, self.power_supply.get_power())
+    def _update_displays(self):
+        t = self._timer.elapsed_time_seconds()
+        self.graph.add_to(0, t, self._power_supply.get_target_voltage())
+        self.graph.add_to(1, t, self._power_supply.get_voltage())
+        self.graph.add_to(2, t, self._power_supply.get_current())
+        self.graph.add_to(3, t, self._power_supply.get_power())
+        self.progress_bar.update(self.profile.get_progress())
+        self.progress_readout.update("{:.2f}".format(self.profile.get_progress() * 100) + "%")
 
     def run_auto(self):
         self.graph.wipe_all()
-        self._experimentTimer.reset()
         self.progress_bar.reset()
         self.progress_readout.update("0.00%")
-        self._waitTimer.reset()
-        self.errorTimer.reset()
-        for target_voltage, waitTime in self.profile:
-
-            self._waitTimer.reset()
-            while self._paused or self.manualControlEnabled:
-                self._update_graph(
-                    self._experimentTimer.elapsedTimeSeconds(), target_voltage
-                )
+        self._timer.reset()
+        for target_voltage, scheduledTime in self.profile:
+            while self.manualControlEnabled:
                 time.sleep(0.01)
 
-            dt = self.errorTimer.elapsedTimeSeconds()
+            while self._timer.elapsed_time_seconds() < scheduledTime:
+                time.sleep(0.001)
 
-            estimated_error = self.errorDerivative * dt + self.lastWaitError
-
-            timeToWait = max(0, waitTime + estimated_error)
-
-            self._waitTimer.reset()
-            time.sleep(timeToWait)
-            waitError = waitTime - self._waitTimer.elapsedTimeSeconds()
-            if dt == 0:
-                self.errorDerivative = 0
-            else:
-                self.errorDerivative = (waitError - self.lastWaitError) / dt
-            self.errorTimer.reset()
-            self.lastWaitError = waitError
+            target_voltage = max(target_voltage, 0)
+            self.targetVoltage = target_voltage
+            self._power_supply.set_voltage(self.targetVoltage)
+            self._update_displays()
 
             if not self._active:
                 break
-            target_voltage = max(target_voltage, 0)
-            self.targetVoltage = target_voltage
-            self.power_supply.set_voltage(self.targetVoltage)
-            self.progress_bar.update(self.profile.get_progress())
-            self.progress_readout.update(
-                "{:.2f}".format(self.profile.get_progress() * 100) + "%"
-            )
-            self._update_graph(
-                self._experimentTimer.elapsedTimeSeconds(), target_voltage
-            )
 
     def run_manual(self):
         pass
@@ -312,7 +297,7 @@ class Experiment(Thread):
         threading.Thread(target=self._daemon, daemon=True).start()
         self.run_auto()
         if end_at_zero:
-            self.power_supply.set_voltage(0)
+            self._power_supply.set_voltage(0)
             self.voltage_readout.update(0)
         if self._active:
             self.progress_readout.recolor(FINISHED_GREEN)
@@ -427,8 +412,8 @@ class PowerSupply:
             self._instr.write(f"SOUR: CURR {limit}\n")
 
     def set_voltage(self, voltage: float):
+        self._targetVoltage = voltage
         if self.is_connected():
-            self._targetVoltage = voltage
             self._instr.write(f"VOLT {voltage}\n")
 
     def set_current(self, current: float):

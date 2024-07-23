@@ -156,27 +156,27 @@ class Switch:
     def __init__(self, master, switch_type=TOGGLE, checked=True, onswitch=lambda checked: None):
         self._onswitch = onswitch
         if switch_type is TOGGLE:
-            self._checked = ImageTk.PhotoImage(Image.open("images/checked.png").resize(TOGGLE))
-            self._unchecked = ImageTk.PhotoImage(Image.open("images/unchecked.PNG").resize(TOGGLE))
+            self._checkedImg = ImageTk.PhotoImage(Image.open("images/checked.png").resize(TOGGLE))
+            self._uncheckedImg = ImageTk.PhotoImage(Image.open("images/unchecked.PNG").resize(TOGGLE))
         else:
-            self._checked = ImageTk.PhotoImage(Image.open("images/play.png").resize(PLAY_PAUSE))
-            self._unchecked = ImageTk.PhotoImage(Image.open("images/pause.png").resize(PLAY_PAUSE))
+            self._checkedImg = ImageTk.PhotoImage(Image.open("images/play.png").resize(PLAY_PAUSE))
+            self._uncheckedImg = ImageTk.PhotoImage(Image.open("images/pause.png").resize(PLAY_PAUSE))
 
         self.button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY)
         if checked:
-            self.button.config(image=self._checked)
+            self.button.config(image=self._checkedImg)
         else:
-            self.button.config(image=self._unchecked)
+            self.button.config(image=self._uncheckedImg)
         self.button.config(command=self.toggle)
-        self.button.image = self._checked
+        self.button.image = self._checkedImg
         self._checked = checked
 
     def toggle(self):
         self._checked = not self._checked
         if self._checked:
-            self.button.config(image=self._checked)
+            self.button.config(image=self._checkedImg)
         else:
-            self.button.config(image=self._unchecked)
+            self.button.config(image=self._uncheckedImg)
         self._onswitch(self._checked)
 
     def setState(self, on: bool):
@@ -311,7 +311,7 @@ class HighlightedButtonPair:
 
 class ProgressBar(Thread):
     def __init__(self, master, size: tuple[float, float], animated=False):
-        super().__init__()
+        super().__init__(daemon=True)
         self.daemon = True
         self._size = size
         self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2, highlightbackground=BLUE)

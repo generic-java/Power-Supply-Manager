@@ -17,8 +17,8 @@ from power_supply_experiment import (
     PowerSupply,
     Experiment,
     kill_active_experiment,
-    pauseActiveExperiment,
-    getActiveExperiment,
+    pause_active_experiment,
+    get_active_experiment,
 )
 from tkutils import *
 
@@ -33,6 +33,9 @@ DEFAULT_SETTINGS = {
     "testTime": 10,
     "resetVoltage": True,
 }
+
+DEFAULT_SPACING = 12
+
 settings_dir = "./settings"
 settings_file_name = "settings.json"
 
@@ -84,11 +87,11 @@ def main():
             "endAtZeroBoolVar": reset_voltage,
             "voltageReadout": target_voltage_readout,
             "timeReadout": elapsed_time_readout,
-            "progress_readout": progress_readout,
-            "progress_bar": progress_bar,
-            "actual_voltage_readout": actual_voltage_readout,
-            "actual_current_readout": actual_current_readout,
-            "power_readout": power_readout,
+            "progressReadout": progress_readout,
+            "progressBar": progress_bar,
+            "actualVoltageReadout": actual_voltage_readout,
+            "actualCurrentReadout": actual_current_readout,
+            "powerReadout": power_readout,
             "onFinish": on_experiment_end,
             "graph": graph,
         }
@@ -98,9 +101,9 @@ def main():
 
     def manage_active_experiment(playing: bool):
         if playing:
-            pauseActiveExperiment()
+            pause_active_experiment()
         else:
-            active_experiment = getActiveExperiment()
+            active_experiment = get_active_experiment()
             if active_experiment is not None:
                 if active_experiment.is_active():
                     active_experiment.unpause()
@@ -165,7 +168,7 @@ def main():
     connection_status.set("Disconnected")
     # End region
 
-    # Region machine address chooser
+    # Region machine address chooser (row 0)
     machine_addr_chooser_container, machine_address = label_entry_group(
         text_config_frame, settings["machineAddress"], 78, "Machine address"
     )
@@ -175,12 +178,12 @@ def main():
         "Connect",
         command=lambda: new_power_supply(machine_address.get()),
     ).grid(row=0, column=2, padx=20)
-    machine_addr_chooser_container.config(pady=20, background=GRAY)
-    machine_addr_chooser_container.place(relx=0, y=50, anchor=tk.W)
+    machine_addr_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    machine_addr_chooser_container.grid(row=0, column=0)
 
     # End region
 
-    # Region data location chooser
+    # Region data location chooser (row 1)
     def set_folder_path():
         directory = askdirectory()
         if directory != "":
@@ -195,12 +198,12 @@ def main():
         "Choose folder",
         command=lambda: set_folder_path(),
     ).grid(row=0, column=2, padx=20)
-    folder_chooser_container.config(pady=20, background=GRAY)
-    folder_chooser_container.place(relx=0, y=125, anchor=tk.W)
+    folder_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    folder_chooser_container.grid(row=1, column=0)
 
     # End region
 
-    # Region file chooser
+    # Region file chooser (row 2)
     def set_file_path():
         directory = askopenfilename(filetypes=[("CSV Files", ".csv")])
         if directory != "":
@@ -212,12 +215,12 @@ def main():
     make_text_widget(
         "Button", file_chooser_container, "Choose file", command=set_file_path
     ).grid(row=0, column=2, padx=20)
-    file_chooser_container.config(pady=20, background=GRAY)
-    file_chooser_container.place(relx=0, y=200, anchor=tk.W)
+    file_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    file_chooser_container.grid(row=2, column=0)
 
     # End region
 
-    # Region profile managing widgets
+    # Region profile managing widgets (row 3)
     @simple_tk_callback
     def toggle_time_input_visibility():
         if profile_menu.get_selected_option() == "Evenly spaced":
@@ -236,24 +239,16 @@ def main():
 
     profile_menu.on_option_select(toggle_time_input_visibility)
     profile_menu.select_option(settings["profileType"])
-    profile_manager_frame.config(background=GRAY)
-    profile_manager_frame.place(relx=0, y=250)
+    profile_manager_frame.config(background=GRAY, pady=DEFAULT_SPACING)
+    profile_manager_frame.grid(row=3, column=0, sticky=tk.W)
     # End region
 
     # Region reset voltage switch
-    check_container, reset_voltage = label_switch_group(
-        profile_manager_frame, "Set voltage to zero at experiment end"
-    )
+    check_container, reset_voltage = label_switch_group(profile_manager_frame, "Set voltage to zero at experiment end")
     reset_voltage.set(bool(settings["resetVoltage"]))
     check_container.config(background=GRAY)
     check_container.grid(row=0, column=3)
     # End region
-
-    # Region target power input
-    target_power_container, target_power_input = label_entry_group(
-        text_config_frame, 0, 4, "Target power (W)"
-    )
-    target_power_container.config(background=GRAY)
 
     # Region play, pause, and stop buttons
     experiment_manager_frame = tk.Frame(text_config_frame, background=GRAY)
@@ -285,26 +280,34 @@ def main():
     progress_readout.get_label().grid(row=0, column=3)
 
     # End region
+    # Region target power input
+    control_type_frame = tk.Frame(text_config_frame, padx=20, pady=20, background=GRAY)
+
+    target_power_container, target_power_input = label_entry_group(control_type_frame, 0, 4, "Target power (W)")
+    target_power_container.config(background=GRAY)
+
     def toggle_target_power_visibility(highlighted: int):
         if highlighted == 0:
-            target_power_container.place_forget()
-            experiment_manager_frame.place(x=0, y=440, anchor=tk.W)
+            target_power_container.grid_forget()
+            experiment_manager_frame.grid(row=5, column=0, sticky=tk.W)
         else:
-            target_power_container.place(x=400, y=350, anchor=tk.W)
-            experiment_manager_frame.place_forget()
+            target_power_container.grid(row=0, column=1)
+            experiment_manager_frame.grid_forget()
             start_experiment_button.setState(on=True)
 
     # End region
 
-    # Region control type chooser
+    # Region control type chooser (row 4)
+
     control_type_toggle = HighlightedButtonPair(
-        text_config_frame,
+        control_type_frame,
         "Automatic control",
         "Manual control",
         onSwitch=toggle_target_power_visibility,
     )
     control_type_toggle.select(settings["controlType"])
-    control_type_toggle.frame.place(x=20, y=350, anchor=tk.W)
+    control_type_toggle.frame.grid(row=0, column=0)
+    control_type_frame.grid(row=4, column=0, sticky=tk.W)
     # End region
 
     # Region progress readout

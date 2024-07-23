@@ -320,6 +320,7 @@ class ProgressBar(Thread):
         self._displayed_progress = 0
         self._last_displayed_progress = 0
         self._animated = animated
+        self._active = True
         self.start()
 
     def reset(self):
@@ -335,8 +336,11 @@ class ProgressBar(Thread):
             if not self._animated:
                 self._displayed_progress = self._progress_percent
 
+    def __del__(self):
+        self._active = False
+        
     def run(self):
-        while True:
+        while self._active:
             try:
                 self._displayed_progress += (self._progress_percent - self._displayed_progress) / 10
                 if self._last_displayed_progress > self._displayed_progress:

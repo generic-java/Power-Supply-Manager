@@ -1,9 +1,1 @@
-{
-  "machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR",
-  "fileURI": "C:/Users/stems/Downloads/Profiles/profile.csv",
-  "dataStoragePath": "C:/Users/stems/Downloads/",
-  "profileType": "Evenly spaced",
-  "controlType": 0,
-  "testTime": "3",
-  "resetVoltage": false
-}
+{"machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR", "fileURI": "C:/Users/stems/Downloads/Profiles/profile.csv", "dataStoragePath": "C:/Users/stems/Downloads/", "profileType": "Evenly spaced", "controlType": 0, "testTime": "3", "resetVoltage": false}

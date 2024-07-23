@@ -43,6 +43,11 @@ current_limit = 30
 
 
 def main():
+    def exit_program():
+        # del graph
+        # del progress_bar
+        save_settings()
+
     def new_power_supply(addr: str):
         power_supply = PowerSupply(addr, auto_connect=False)
 
@@ -367,8 +372,8 @@ def main():
     graph.get_widget().place(relx=0.5, rely=1, anchor=tk.S)
     window.after(100, lambda: new_power_supply(machine_address.get()))
 
+    window.wm_protocol("WM_DELETE_WINDOW", exit_program)
     window.mainloop()
-    save_settings()
 
 
 if __name__ == "__main__":

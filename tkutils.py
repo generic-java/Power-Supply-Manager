@@ -10,6 +10,8 @@ window = tk.Tk()
 
 GRAY = "#1f1f01"
 BLUE = "#7cdcfe"
+
+APPLICATION_FONT_PATH = r"fonts\Source_Code_Pro\static\SourceCodePro-Regular.ttf"
 DEFAULT_FONT = ("Source Code Pro", 13, "normal")
 
 DEFAULT_BUTTON = {
@@ -79,16 +81,16 @@ PLAY_PAUSE = (50, 50)
 _images = []
 
 
-def simpleTKCallback(func):
+def simple_tk_callback(func):
     def callback(*args):
         func()
 
     return callback
 
 
-def _getDefaultDict(classType) -> dict:
+def _get_default_dict(class_type) -> dict:
     try:
-        attr = getattr(sys.modules[__name__], "DEFAULT_" + classType.upper())
+        attr = getattr(sys.modules[__name__], "DEFAULT_" + class_type.upper())
         if isinstance(attr, dict):
             return attr
     except AttributeError:
@@ -96,45 +98,45 @@ def _getDefaultDict(classType) -> dict:
     return {}
 
 
-def makeTextWidgetEx(classType: str, master: tk.Misc, text: str, **kwargs) -> (tk.Widget, tk.StringVar):
-    stringVar = tk.StringVar()
-    stringVar.set(text)
-    kwargs["textvariable"] = stringVar
+def make_text_widget_ex(class_type: str, master: tk.Misc, text: str, **kwargs) -> (tk.Widget, tk.StringVar):
+    string_var = tk.StringVar()
+    string_var.set(text)
+    kwargs["textvariable"] = string_var
     try:
-        return getattr(tk, classType)(master, kwargs, **_getDefaultDict(classType)), stringVar  # Gets the module attribute with the given class name and creates an instance of it
+        return getattr(tk, class_type)(master, **kwargs, **_get_default_dict(class_type)), string_var  # Gets the module attribute with the given class name and creates an instance of it
     except AttributeError:
-        raise AttributeError("The tkinter module has no \"" + classType + "\" class")
+        raise AttributeError("The tkinter module has no \"" + class_type + "\" class")
 
 
-def makeTextWidget(classType: str, master, text: str, **kwargs):
-    return makeTextWidgetEx(classType, master, text, **kwargs)[0]
+def make_text_widget(class_type: str, master, text: str, **kwargs):
+    return make_text_widget_ex(class_type, master, text, **kwargs)[0]
 
 
-def labelEntryGroup(master, entryText: str, entryWidth: int, labelText: str) -> (tk.Frame, tk.StringVar):
+def label_entry_group(master, entry_text: str, entry_width: int, label_text: str) -> (tk.Frame, tk.StringVar):
     frame = tk.Frame(master)
-    label = makeTextWidget("Label", frame, labelText, padx=20)
-    entry, stringVar = makeTextWidgetEx("Entry", frame, entryText, width=entryWidth)
+    label = make_text_widget("Label", frame, label_text, padx=20)
+    entry, string_var = make_text_widget_ex("Entry", frame, entry_text, width=entry_width)
     label.grid(row=0, column=0)
     entry.grid(row=0, column=1)
-    return frame, stringVar
+    return frame, string_var
 
 
-def labelSwitchGroup(master, labelText: str) -> (tk.Frame, tk.BooleanVar):
+def label_switch_group(master, label_text: str) -> (tk.Frame, tk.BooleanVar):
     frame = tk.Frame(master)
-    label = makeTextWidget("Label", frame, labelText, padx=20)
-    boolVar = tk.BooleanVar()
-    boolVar.set(True)
+    label = make_text_widget("Label", frame, label_text, padx=20)
+    bool_var = tk.BooleanVar()
+    bool_var.set(True)
     checkbox = Switch(frame)
     checkbox.button.grid(row=0, column=1)
     label.grid(row=0, column=0)
-    return frame, boolVar
+    return frame, bool_var
 
 
-def labelMenuGroup(master, labelText, *options):
+def label_menu_group(master, label_text, *options):
     frame = tk.Frame(master)
-    label = makeTextWidget("Label", frame, labelText, padx=20)
+    label = make_text_widget("Label", frame, label_text, padx=20)
     menu = Menu(frame, options[1], *options)
-    menu.menuButton.grid(row=0, column=1)
+    menu.menu_button.grid(row=0, column=1)
     label.grid(row=0, column=0)
     return frame, menu
 
@@ -143,205 +145,208 @@ def spacer(master, width):
     return tk.Frame(master, width=width, background=GRAY)
 
 
-def makeImgButton(master, imagePath, size, command=lambda *args: None):
-    img = ImageTk.PhotoImage(Image.open(imagePath).resize(size))
+def make_img_button(master, image_path, size, command=lambda *args: None):
+    img = ImageTk.PhotoImage(Image.open(image_path).resize(size))
     _images.append(img)  # If this isn't stored somewhere permanently, it will be garbage collected and tk will not show it
     button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY, image=img, command=command)
     return button
 
 
 class Switch:
-    def __init__(self, master, switchType=TOGGLE, checked=True, onswitch=lambda checked: None):
+    def __init__(self, master, switch_type=TOGGLE, checked=True, onswitch=lambda checked: None):
         self._onswitch = onswitch
-        if switchType is TOGGLE:
-            self.checked = ImageTk.PhotoImage(Image.open("images/checked.png").resize(TOGGLE))
-            self.unchecked = ImageTk.PhotoImage(Image.open("images/unchecked.PNG").resize(TOGGLE))
+        if switch_type is TOGGLE:
+            self._checkedImg = ImageTk.PhotoImage(Image.open("images/checked.png").resize(TOGGLE))
+            self._uncheckedImg = ImageTk.PhotoImage(Image.open("images/unchecked.PNG").resize(TOGGLE))
         else:
-            self.checked = ImageTk.PhotoImage(Image.open("images/play.png").resize(PLAY_PAUSE))
-            self.unchecked = ImageTk.PhotoImage(Image.open("images/pause.png").resize(PLAY_PAUSE))
+            self._checkedImg = ImageTk.PhotoImage(Image.open("images/play.png").resize(PLAY_PAUSE))
+            self._uncheckedImg = ImageTk.PhotoImage(Image.open("images/pause.png").resize(PLAY_PAUSE))
 
         self.button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY)
         if checked:
-            self.button.config(image=self.checked)
+            self.button.config(image=self._checkedImg)
         else:
-            self.button.config(image=self.unchecked)
+            self.button.config(image=self._uncheckedImg)
         self.button.config(command=self.toggle)
-        self.button.image = self.checked
+        self.button.image = self._checkedImg
         self._checked = checked
 
     def toggle(self):
         self._checked = not self._checked
         if self._checked:
-            self.button.config(image=self.checked)
+            self.button.config(image=self._checkedImg)
         else:
-            self.button.config(image=self.unchecked)
+            self.button.config(image=self._uncheckedImg)
         self._onswitch(self._checked)
 
     def setState(self, on: bool):
-        if not self._checked and on or self.checked and not on:
+        if not self._checked and on or self._checked and not on:
             self.toggle()
 
 
 class Menu:
-    def __init__(self, master, displayedOption, *options):
-        self._menuOpen = False
-        self._mouseOverBtn = False
-        self._mouseOverMenuFrame = False
+    def __init__(self, master, displayed_option, *options):
+        self._menu_open = False
+        self._mouse_over_btn = False
+        self._mouse_over_menu_frame = False
         self._dropdown = ImageTk.PhotoImage(Image.open("images/drop_down.PNG").resize((8, 8)))
-        self.menuButton, self.selectedOption = makeTextWidgetEx("Button", master, displayedOption)
-        self.menuButton.config(image=self._dropdown, compound=tk.RIGHT)
+        self.menu_button, self._selected_option = make_text_widget_ex("Button", master, displayed_option)
+        self.menu_button.config(image=self._dropdown, compound=tk.RIGHT)
         window.bind("<Button-1>", self._toggleVisibility)
 
-        @simpleTKCallback
+        @simple_tk_callback
         def mouseEnterBtn():
-            self._mouseOverBtn = True
+            self._mouse_over_btn = True
 
-        @simpleTKCallback
+        @simple_tk_callback
         def mouseLeaveBtn():
-            self._mouseOverBtn = False
+            self._mouse_over_btn = False
 
-        @simpleTKCallback
-        def mouseEnterMenuFrame():
-            self._mouseOverMenuFrame = True
+        @simple_tk_callback
+        def mouse_enter_menu_frame():
+            self._mouse_over_menu_frame = True
 
-        @simpleTKCallback
-        def mouseLeaveMenuFrame():
-            self._mouseOverMenuFrame = False
+        @simple_tk_callback
+        def mouse_leave_menu_frame():
+            self._mouse_over_menu_frame = False
 
-        self.menuButton.bind("<Enter>", mouseEnterBtn)
-        self.menuButton.bind("<Leave>", mouseLeaveBtn)
-        self.displayedOption = displayedOption
+        self.menu_button.bind("<Enter>", mouseEnterBtn)
+        self.menu_button.bind("<Leave>", mouseLeaveBtn)
+        self.displayed_option = displayed_option
         self.options = options
-        self._menuFrame = tk.Frame(window, DEFAULT_MENU)
-        self._menuFrame.bind("<Enter>", mouseEnterMenuFrame)
-        self._menuFrame.bind("<Leave>", mouseLeaveMenuFrame)
+        self._menu_frame = tk.Frame(window, DEFAULT_MENU)
+        self._menu_frame.bind("<Enter>", mouse_enter_menu_frame)
+        self._menu_frame.bind("<Leave>", mouse_leave_menu_frame)
         for i in range(len(options)):
-            @simpleTKCallback
+            @simple_tk_callback
             def displayChosenOption(index=i):  # See https://docs.python-guide.org/writing/gotchas/
-                self.selectedOption.set(options[index])
+                self._selected_option.set(options[index])
                 self._hide()
 
-            button, stringVar = makeTextWidgetEx("Button", self._menuFrame, options[i])
+            button = make_text_widget("Button", self._menu_frame, options[i])
             button.config(command=displayChosenOption, highlightbackground=GRAY, highlightthickness=1)
             button.config(DEFAULT_MENU_BUTTON)
             button.grid(row=i, column=0, sticky=tk.EW)
 
-            @simpleTKCallback
-            def onBtnMouseHover(widget=button):
+            @simple_tk_callback
+            def on_btn_mouse_hover(widget=button):
                 widget.config(**UNHIGHLIGHTED_BUTTON)
 
-            @simpleTKCallback
-            def onBtnMouseLeave(widget=button):
+            @simple_tk_callback
+            def on_btn_mouse_leave(widget=button):
                 widget.config(**DEFAULT_MENU_BUTTON)
 
-            button.bind("<Enter>", onBtnMouseHover)
-            button.bind("<Leave>", onBtnMouseLeave)
+            button.bind("<Enter>", on_btn_mouse_hover)
+            button.bind("<Leave>", on_btn_mouse_leave)
 
-    def onOptionSelect(self, function):
-        self.selectedOption.trace_add("write", simpleTKCallback(function))
+    def on_option_select(self, function):
+        self._selected_option.trace_add("write", simple_tk_callback(function))
 
-    def selectOption(self, chosenOption: str):
-        hasOption = False
+    def select_option(self, chosen_option: str):
+        has_option = False
         for option in self.options:
-            if chosenOption==option:
-                hasOption = True
-        if not hasOption:
-            raise AttributeError(f"Menu object has no '{chosenOption}' option")
-        self.selectedOption.set(chosenOption)
+            if chosen_option == option:
+                has_option = True
+        if not has_option:
+            raise AttributeError(f"Menu object has no '{chosen_option}' option")
+        self._selected_option.set(chosen_option)
 
-    def getSelectedOption(self):
-        return self.selectedOption.get()
+    def get_selected_option(self):
+        return self._selected_option.get()
 
     def _hide(self):
-        self._menuFrame.place_forget()
-        self._menuOpen = False
+        self._menu_frame.place_forget()
+        self._menu_open = False
 
     def _toggleVisibility(self, *args):
-        if self._menuOpen:
-            if not self._mouseOverMenuFrame:
+        if self._menu_open:
+            if not self._mouse_over_menu_frame:
                 self._hide()
-        elif self._mouseOverBtn:
-            self._menuFrame.place(x=self.menuButton.winfo_rootx() - window.winfo_rootx(), y=self.menuButton.winfo_rooty() - window.winfo_rooty() + self.menuButton.winfo_height(), anchor=tk.NW)
-            self._menuFrame.config(padx=0)
+        elif self._mouse_over_btn:
+            self._menu_frame.place(x=self.menu_button.winfo_rootx() - window.winfo_rootx(), y=self.menu_button.winfo_rooty() - window.winfo_rooty() + self.menu_button.winfo_height(), anchor=tk.NW)
+            self._menu_frame.config(padx=0)
             for i in range(10):
-                self._menuFrame.lift()
-            self._menuOpen = True
+                self._menu_frame.lift()
+            self._menu_open = True
 
 
 class HighlightedButtonPair:
-    def __init__(self, master, firstButtonText, secondButtonText, highlighted: int = 0, firstButtonCommand=lambda: None, secondButtonCommand=lambda: None, onSwitch=lambda i: None):
+    def __init__(self, master, first_button_text, second_button_text, highlighted: int = 0, first_button_command=lambda: None, second_button_command=lambda: None, onSwitch=lambda i: None):
         self.frame = tk.Frame(master, padx=5, pady=5, background=GRAY, highlightbackground=BLUE, highlightthickness=2)
-        rightSpacer = tk.Frame(self.frame, width=5, background=GRAY)
 
-        def makeBtnCmd(cmd, target):
+        def make_btn_cmd(cmd, target):
             def newCmd():
                 self.select(target)
                 cmd()
 
             return newCmd
 
-        self._onSwitch = onSwitch
-        self.firstButton = makeTextWidget("Button", self.frame, firstButtonText, command=makeBtnCmd(firstButtonCommand, target=0))
-        self.secondButton = makeTextWidget("Button", self.frame, secondButtonText, command=makeBtnCmd(secondButtonCommand, target=1))
+        self._on_switch = onSwitch
+        self.first_button = make_text_widget("Button", self.frame, first_button_text, command=make_btn_cmd(first_button_command, target=0))
+        self.second_button = make_text_widget("Button", self.frame, second_button_text, command=make_btn_cmd(second_button_command, target=1))
         self._highlighted = None
         self.select(highlighted)
-        self.firstButton.grid(row=0, column=0)
-        rightSpacer.grid(row=0, column=1)
-        self.secondButton.grid(row=0, column=2)
+        self.first_button.grid(row=0, column=0)
+        spacer(self.frame, 5).grid(row=0, column=1)
+        self.second_button.grid(row=0, column=2)
 
-    def getHighlightedButton(self):
+    def get_highlighted_button(self):
         return self._highlighted
 
     def select(self, target):
         current = self._highlighted
-        if 2 > target==int(target):
+        if 2 > target == int(target):
             self._highlighted = target
         else:
             raise AttributeError("The value of the '_highlighted' argument must be an integer of 0 or 1")
-        if target==0:
-            self.secondButton.config(**UNHIGHLIGHTED_BUTTON)
-            self.firstButton.config(**DEFAULT_BUTTON)
+        if target == 0:
+            self.second_button.config(**UNHIGHLIGHTED_BUTTON)
+            self.first_button.config(**DEFAULT_BUTTON)
         else:
-            self.firstButton.config(**UNHIGHLIGHTED_BUTTON)
-            self.secondButton.config(**DEFAULT_BUTTON)
-        if current!=self._highlighted:
-            self._onSwitch(self._highlighted)
+            self.first_button.config(**UNHIGHLIGHTED_BUTTON)
+            self.second_button.config(**DEFAULT_BUTTON)
+        if current != self._highlighted:
+            self._on_switch(self._highlighted)
 
 
 class ProgressBar(Thread):
-    def __init__(self, master, size: tuple, animated=False):
-        super().__init__()
+    def __init__(self, master, size: tuple[float, float], animated=False):
+        super().__init__(daemon=True)
         self.daemon = True
         self._size = size
         self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2, highlightbackground=BLUE)
         self.bar.create_rectangle((0, 0), self._size, fill=GRAY)
-        self._progressPercent = 0
-        self._displayedProgress = 0
-        self._lastDisplayedProgress = 0
+        self._progress_percent = 0
+        self._displayed_progress = 0
+        self._last_displayed_progress = 0
         self._animated = animated
+        self._active = True
         self.start()
 
     def reset(self):
-        self._displayedProgress = 0
+        self._displayed_progress = 0
         self.update(0)
 
-    def update(self, progressPercent):
-        progressPercent = round(progressPercent, 2)
-        if 0 > progressPercent > 1:
+    def update(self, progress_percent):
+        progress_percent = round(progress_percent, 2)
+        if 0 > progress_percent > 1:
             raise AttributeError("The 'progressPercent' argument must be a number between 0 and 1")
         else:
-            self._progressPercent = progressPercent
+            self._progress_percent = progress_percent
             if not self._animated:
-                self._displayedProgress = self._progressPercent
+                self._displayed_progress = self._progress_percent
 
+    def __del__(self):
+        self._active = False
+        
     def run(self):
-        while True:
+        while self._active:
             try:
-                self._displayedProgress += (self._progressPercent - self._displayedProgress) / 10
-                if self._lastDisplayedProgress > self._displayedProgress:
+                self._displayed_progress += (self._progress_percent - self._displayed_progress) / 10
+                if self._last_displayed_progress > self._displayed_progress:
                     self.bar.delete("all")
-                self.bar.create_rectangle((0, 0), (self._displayedProgress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
-                self._lastDisplayedProgress = self._displayedProgress
+                self.bar.create_rectangle((0, 0), (self._displayed_progress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
+                self._last_displayed_progress = self._displayed_progress
             except tkinter.TclError:
                 pass
             finally:
@@ -349,17 +354,17 @@ class ProgressBar(Thread):
 
 
 class Readout:
-    def __init__(self, stringVar: tk.StringVar, label: tk.Label, prefix: str):
-        self.__stringVar = stringVar
-        self.__label = label
-        self.__label.config(textvariable=stringVar, **DEFAULT_LABEL)
-        self.__prefix = prefix
+    def __init__(self, string_var: tk.StringVar, label: tk.Label, prefix: str):
+        self._string_var = string_var
+        self._label = label
+        self._label.config(textvariable=string_var, **DEFAULT_LABEL)
+        self._prefix = prefix
 
-    def getLabel(self):
-        return self.__label
+    def get_label(self):
+        return self._label
 
     def update(self, value):
-        self.__label.after(0, self.__stringVar.set(self.__prefix + str(value)))  # Booting this function call back to the main thread to avoid tkinter crashes
+        self._label.after(0, self._string_var.set(self._prefix + str(value)))
 
     def recolor(self, color: str):
-        self.__label.config(fg=color)
+        self._label.config(fg=color)

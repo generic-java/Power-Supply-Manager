@@ -9,329 +9,360 @@ import pyvisa
 
 from tkutils import *
 
-_activeExp = None
-_activePowerSupply = None
+_active_exp = None
+_active_power_supply = None
 
 
-def getActiveExperiment():
-    return _activeExp
+def get_active_experiment():
+    return _active_exp
 
 
-def pauseActiveExperiment():
-    if _activeExp is not None:
-        _activeExp.pause()
+def pause_active_experiment():
+    if _active_exp is not None:
+        _active_exp.pause()
 
 
-def killActiveExperiment():
-    if _activeExp is not None:
-        _activeExp.kill()
-        _activeExp.unpause()
+def kill_active_experiment():
+    if _active_exp is not None:
+        _active_exp.kill()
+        _active_exp.unpause()
 
 
 class Timer:
     def __init__(self):
-        self.startTimestamp = time.time()
+        self.start_timestamp = time.time()
         self._paused = False
-        self._onPauseElapsedTime = 0
+        self._elapsed_time_on_pause = 0
 
     def reset(self):
-        self.startTimestamp = time.time()
+        self.start_timestamp = time.time()
 
-    def elapsedTimeSeconds(self):
+    def elapsed_time_seconds(self):
         if self._paused:
-            return self._onPauseElapsedTime
+            return self._elapsed_time_on_pause
         else:
-            return time.time() - self.startTimestamp
+            return time.time() - self.start_timestamp
 
-    def elapsedTimeMillis(self):
-        return self.elapsedTimeSeconds() / 1000
+    def elapsed_time_millis(self):
+        return self.elapsed_time_seconds() / 1000
 
     def pause(self):
+        self._elapsed_time_on_pause = self.elapsed_time_seconds()
         self._paused = True
-        self._onPauseElapsedTime = self.elapsedTimeSeconds()
 
     def unpause(self):
         self._paused = False
-        self.startTimestamp = time.time() - self._onPauseElapsedTime
+        self.start_timestamp = time.time() - self._elapsed_time_on_pause
 
 
 class PIDController:
-    def __init__(self, kP, kI, kD, integralReset=True):
-        self.kP = kP
-        self.kI = kI
-        self.kD = kD
+    def __init__(self, k_p, k_i, k_d, integral_reset=True):
+        self.k_p = k_p
+        self.k_i = k_i
+        self.k_d = k_d
         self.integral = 0
-        self.lastTime = None
-        self.lastMeasurement = None
-        self.lastSetpoint = None
-        self.integralReset = integralReset
+        self.last_time = None
+        self.last_measurement = None
+        self.last_setpoint = None
+        self.integral_reset = integral_reset
 
     def calculate(self, measurement, setpoint):
-        currentTime = time.time()
-        if self.lastTime is None:
+        current_time = time.time()
+        if self.last_time is None:
             dt = 0
         else:
-            dt = currentTime - self.lastTime
-        if self.lastMeasurement is None:
+            dt = current_time - self.last_time
+        if self.last_measurement is None:
             dx = 0
         else:
-            dx = measurement - self.lastMeasurement  # Typically, a PID controller will use the time derivative of error instead of the time derivative of position.  However, using the time derivative of position does effectively the same thing, except that it prevents the output spike that occurs when the setpoint is changed
+            dx = (measurement - self.last_measurement)
+            # Typically, a PID controller will use the time derivative of error instead of the time derivative of position.  However, using the time derivative of position does effectively the
+            # same thing, except that it prevents the output spike that occurs when the setpoint is changed
         error = setpoint - measurement
-        self.lastTime = currentTime
-        self.lastMeasurement = measurement
-        if self.lastSetpoint is not None and setpoint!=self.lastSetpoint and self.integralReset:
+        self.last_time = current_time
+        self.last_measurement = measurement
+        if (
+                self.last_setpoint is not None
+                and setpoint != self.last_setpoint
+                and self.integral_reset
+        ):
             self.integral = 0
-        self.integral += self.kI * error * dt
-        if dt==0:
-            dTerm = 0
+        self.integral += self.k_i * error * dt
+        if dt == 0:
+            d_term = 0
         else:
-            dTerm = self.kP * dx / dt
-        return self.kP * error + self.integral + dTerm
+            d_term = self.k_p * dx / dt
+        return self.k_p * error + self.integral + d_term
 
 
 class Profile:
     EVENLY_SPACED = 0
     ORDERED_PAIRS = 1
 
-    def __init__(self, profileFilePath: tkinter.StringVar, profileType: int, totalTestTime: tkinter.StringVar = 0):
+    def __init__(self, profile_file_path: tkinter.StringVar, profile_type: int, total_test_time: tkinter.StringVar = 0):
         self.index = -1
-        self.profileFilePath = profileFilePath
-        self.profileType = profileType
-        self.totalTestTime = totalTestTime
+        self.profile_file_path = profile_file_path
+        self.profile_type = profile_type
+        self.total_test_time = total_test_time
         self.points = []
-        self.scheduledTimes = []
+        self._scheduled_times = []
 
-    def _readCSV(self, path: str):
+    def _read_csv(self, path: str):
         data = []
-        try:
-            with open(path, newline="") as csvfile:
-                reader = csv.reader(csvfile, delimiter=",", quotechar="|")
-                for row in reader:
-                    for i in range(len(row)):
-                        row[i] = float(row[i])
-                    data.append(row)
-                    if len(row)==2 and self.profileType==Profile.EVENLY_SPACED:
-                        raise AttributeError
-                    elif len(row)==1 and self.profileType==Profile.ORDERED_PAIRS:
-                        raise AttributeError
-                self.points = data
-                self.timePerPoint = float(self.totalTestTime.get()) / len(data)
-        except (AttributeError, ValueError):
-            pass  # TODO: add actual code here
+        # try:
+        with open(path, newline="") as csvfile:
+            reader = csv.reader(csvfile, delimiter=",", quotechar="|")
+            for row in reader:
+                for i in range(len(row)):
+                    row[i] = float(row[i])
+                data.append(row)
+                if len(row) == 2 and self.profile_type == Profile.EVENLY_SPACED:
+                    raise AttributeError
+                elif len(row) == 1 and self.profile_type == Profile.ORDERED_PAIRS:
+                    raise AttributeError
+            self.points = data
+            self.time_per_point = float(self.total_test_time.get()) / len(data)
+        # except (AttributeError, ValueError):
+        #   print("Invalid file")
+        #  pass  # TODO: add actual code here
 
-    def getProgress(self):
+    def get_progress(self):
         return max(self.index + 1, 0) / len(self.points)
 
     def __iter__(self):
         self.index = -1
-        self._readCSV(self.profileFilePath.get())
-        self.scheduledTimes = []
-        if self.profileType==Profile.EVENLY_SPACED:
+        self._read_csv(self.profile_file_path.get())
+        if self.profile_type == Profile.EVENLY_SPACED:
             for i in range(len(self.points)):
-                self.scheduledTimes.append(self.timePerPoint * i)
+                self._scheduled_times.append(self.time_per_point * i)
         return self
 
     def __next__(self):
         self.index += 1
         if self.index < len(self.points):
-            if self.profileType==Profile.ORDERED_PAIRS:
+            if self.profile_type == Profile.ORDERED_PAIRS:
                 return self.points[self.index]
             else:
-                return self.points[self.index][0], self.scheduledTimes[self.index]
+                return self.points[self.index][0], self._scheduled_times[self.index]
         else:
             raise StopIteration
 
 
 class Experiment(Thread):
-
     def __init__(self, **kwargs):
         super().__init__()
-        global _activePowerSupply
-        global _activeExp
-        _activeExp = self
-        self.powerSupply = _activePowerSupply
-        self.runTime = 0
-        self.filePathStringVar = kwargs["filePathStringVar"]
-        self.folderPath = kwargs["folderPathStringVar"]
-        self.runTimeStringVar = kwargs["runTimeStringVar"]
-        self.endAtZeroBoolVar = kwargs["endAtZeroBoolVar"]
-        self.voltageReadout = kwargs["voltageReadout"]
-        self.timeReadout = kwargs["timeReadout"]
-        self.progressReadout = kwargs["progressReadout"]
-        self.progressBar = kwargs["progressBar"]
-        self.actualVoltageReadout = kwargs["actualVoltageReadout"]
-        self.actualCurrentReadout = kwargs["actualCurrentReadout"]
-        self.powerReadout = kwargs["powerReadout"]
-        self._onFinish = kwargs["onFinish"]
+        global _active_power_supply
+        global _active_exp
+        _active_exp = self
+        self._power_supply = _active_power_supply
+        self.run_time = 0
+        self.file_path_string_var = kwargs["filePathStringVar"]
+        self.folder_path = kwargs["folderPathStringVar"]
+        self.run_time_string_var = kwargs["runTimeStringVar"]
+        self.end_at_zero_bool_var = kwargs["endAtZeroBoolVar"]
+        self.voltage_readout = kwargs["voltageReadout"]
+        self.time_readout = kwargs["timeReadout"]
+        self.progress_readout = kwargs["progressReadout"]
+        self.progress_bar = kwargs["progressBar"]
+        self.actual_voltage_readout = kwargs["actualVoltageReadout"]
+        self.actual_current_readout = kwargs["actualCurrentReadout"]
+        self.power_readout = kwargs["powerReadout"]
+        self._on_finish = kwargs["onFinish"]
         self.graph = kwargs["graph"]
-        self.startTimestamp = 0
-        self.elapsedTime = 0
+        self.start_timestamp = 0
+        self.elapsed_time = 0
         self._active = False
         self.daemon = True
         self.data = []
         self.setpoints = []
         self._paused = False
         self.manualControlEnabled = False
-        self.profile = Profile(self.filePathStringVar, Profile.EVENLY_SPACED, self.runTimeStringVar)
+        self.profile = Profile(self.file_path_string_var, Profile.EVENLY_SPACED, self.run_time_string_var)
         self.targetVoltage = 0
-        self._experimentTimer = Timer()
-        self._waitTimer = Timer()
-        self.waitTime = 0
-        self._lastWaitTime = 0
-        self.errorTimer = Timer()
-        self.lastWaitError = 0
-        self.errorDerivative = 0
-        self._waitOffset = 0
-        self._waitOffsets = []
         self._timer = Timer()
 
     def pause(self):
         self._paused = True
+        self._timer.pause()
 
     def unpause(self):
         self._paused = False
+        self._timer.unpause()
 
     def _daemon(self):
-        global _activeExp
+        global _active_exp
         while self._active:
-            if self is not _activeExp:
+            if self is not _active_exp:
                 self.kill()
                 break
             if not self._paused:
-                self.elapsedTime = round(time.time() - self.startTimestamp, 2)
-                self.voltageReadout.update(self.targetVoltage)
-                self.timeReadout.update("{:.2f}".format(min(self.elapsedTime, self.runTime)))
-                self.actualVoltageReadout.update("{:.3f}".format(self.powerSupply.getVoltage()))
-                self.actualCurrentReadout.update("{:.3f}".format(self.powerSupply.getCurrent()))
-                self.powerReadout.update("{:.3f}".format(self.powerSupply.getPower()))
-                self.data.append([self.elapsedTime, self.powerSupply.getTargetVoltage(), self.powerSupply.getVoltage(), self.powerSupply.getCurrent(), self.powerSupply.getPower()])
-                self.progressBar.update(self.profile.getProgress())
-                self.progressReadout.update("{:.2f}".format(self.profile.getProgress() * 100) + "%")
-                self._updateGraph(self._experimentTimer.elapsedTimeSeconds(), self.targetVoltage)
+                self.elapsed_time = round(time.time() - self.start_timestamp, 2)
+                self.voltage_readout.update(self.targetVoltage)
+                self.time_readout.update(
+                    "{:.2f}".format(min(self.elapsed_time, self.run_time))
+                )
+                self.actual_voltage_readout.update(
+                    "{:.3f}".format(self._power_supply.get_voltage())
+                )
+                self.actual_current_readout.update(
+                    "{:.3f}".format(self._power_supply.get_current())
+                )
+                self.power_readout.update("{:.3f}".format(self._power_supply.get_power()))
+                self.data.append(
+                    [
+                        self.elapsed_time,
+                        self._power_supply.get_target_voltage(),
+                        self._power_supply.get_voltage(),
+                        self._power_supply.get_current(),
+                        self._power_supply.get_power(),
+                    ]
+                )
             time.sleep(0.05)  # To free up CPU time
 
-    def _saveExperimentData(self):
+    def _save_experiment_data(self):
         now = datetime.now()
-        folderPath = self.folderPath.get()
-        if not os.path.exists(folderPath):
-            folderPath = askdirectory(title="Data storage directory")
-            self.folderPath.set(folderPath)
+        folder_path = self.folder_path.get()
+        if not os.path.exists(folder_path):
+            folder_path = askdirectory(title="Data storage directory")
+            self.folder_path.set(folder_path)
         try:
-            with open(f"{folderPath}/experiment-{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}.csv", "w",
-                    newline="") as file:
+            with open(
+                    f"{folder_path}/experiment-{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}.csv",
+                    "w",
+                    newline="",
+            ) as file:
                 writer = csv.writer(file, delimiter=",")
-                writer.writerow(["Elapsed Time", "Target Voltage", "Actual Voltage", "Current", "Power"])
+                writer.writerow(
+                    [
+                        "Elapsed Time",
+                        "Target Voltage",
+                        "Actual Voltage",
+                        "Current",
+                        "Power",
+                    ]
+                )
                 for row in self.data:
                     writer.writerow(row)
         except (FileNotFoundError, PermissionError):
+
             def retry():
-                if messagebox.askretrycancel("Invalid path", icon=messagebox.ERROR,
-                        message="The experiment data could not be saved because an invalid path was specified."):
-                    self._saveExperimentData()
+                if messagebox.askretrycancel(
+                        "Invalid path",
+                        icon=messagebox.ERROR,
+                        message="The experiment data could not be saved because an invalid path was specified.",
+                ):
+                    self._save_experiment_data()
 
-            self.filePathStringVar.after(0, func=retry)
+            self.file_path_string_var.after(0, func=retry)
 
-    def _updateGraph(self, t, targetVoltage):
-        self.graph.addTo(0, t, targetVoltage)
-        self.graph.addTo(1, t, self.powerSupply.getVoltage())
-        self.graph.addTo(2, t, self.powerSupply.getCurrent())
-        self.graph.addTo(3, t, self.powerSupply.getPower())
+    def _update_displays(self):
+        t = self._timer.elapsed_time_seconds()
+        self.graph.add_to(0, t, self._power_supply.get_target_voltage())
+        self.graph.add_to(1, t, self._power_supply.get_voltage())
+        self.graph.add_to(2, t, self._power_supply.get_current())
+        self.graph.add_to(3, t, self._power_supply.get_power())
+        self.progress_bar.update(self.profile.get_progress())
+        self.progress_readout.update("{:.2f}".format(self.profile.get_progress() * 100) + "%")
 
-    def runAuto(self):
-        self.graph.wipeAll()
-        self._experimentTimer.reset()
-        self.progressBar.reset()
-        self.progressReadout.update("0.00%")
-        self._waitTimer.reset()
-        self.errorTimer.reset()
+    def run_auto(self):
+        self.graph.wipe_all()
+        self.progress_bar.reset()
+        self.progress_readout.update("0.00%")
         self._timer.reset()
-        for targetVoltage, scheduledTime in self.profile:
-            while self._paused or self.manualControlEnabled:
+        for target_voltage, scheduledTime in self.profile:
+            while self.manualControlEnabled:
                 time.sleep(0.01)
 
-            while self._timer.elapsedTimeSeconds() < scheduledTime:
+            while self._timer.elapsed_time_seconds() < scheduledTime:
                 time.sleep(0.001)
 
-            self.targetVoltage = targetVoltage
-            self.powerSupply.setVoltage(self.targetVoltage)
+            target_voltage = max(target_voltage, 0)
+            self.targetVoltage = target_voltage
+            self._power_supply.set_voltage(self.targetVoltage)
+            self._update_displays()
 
             if not self._active:
                 break
 
-
-    def runManual(self):
+    def run_manual(self):
         pass
 
     def run(self):
         finished = False
         self._active = True
-        self.progressReadout.recolor(BLUE)
-        self.runTime = float(self.runTimeStringVar.get())
-        endAtZero = self.endAtZeroBoolVar.get()
-        self.startTimestamp = time.time()
+        self.progress_readout.recolor(BLUE)
+        self.run_time = float(self.run_time_string_var.get())
+        end_at_zero = self.end_at_zero_bool_var.get()
+        self.start_timestamp = time.time()
         threading.Thread(target=self._daemon, daemon=True).start()
-        self.runAuto()
-        if endAtZero:
-            self.powerSupply.setVoltage(0)
-            self.voltageReadout.update(0)
+        self.run_auto()
+        if end_at_zero:
+            self._power_supply.set_voltage(0)
+            self.voltage_readout.update(0)
         if self._active:
-            self.progressReadout.recolor(FINISHED_GREEN)
+            self.progress_readout.recolor(FINISHED_GREEN)
             self._active = False
             time.sleep(0.1)
-            self._onFinish()
+            self._on_finish()
             if finished:
-                self.progressReadout.update("100.00%")
-            self._saveExperimentData()
+                self.progress_readout.update("100.00%")
+            self._save_experiment_data()
 
     def kill(self):
         self._active = False
 
-    def isActive(self):
+    def is_active(self):
         return self._active
 
 
-def getActivePowerSupply():
-    return _activePowerSupply
+def get_active_power_supply():
+    return _active_power_supply
 
 
 class PowerSupply:
-    def __init__(self, resourceName: str, autoConnect: bool = False, onConnect=lambda: None, onDisconnect=lambda: None):
+    def __init__(
+            self,
+            resource_name: str,
+            auto_connect: bool = False,
+            on_connect=lambda: None,
+            on_disconnect=lambda: None,
+    ):
         self._instr = None
-        self._resourceName = resourceName
+        self._resourceName = resource_name
         self._rm = pyvisa.ResourceManager()
-        self._onConnect = onConnect
-        self._onDisconnect = onDisconnect
-        self._lastConnected = False
+        self._onConnect = on_connect
+        self._on_disconnect = on_disconnect
+        self._last_connected = False
         self._active = False
         self._currentLimit = None
-        self._IDN = None
+        self._idn = None
         self._targetVoltage = 0
         self._targetCurrent = 0
         self._voltage = 0
         self._current = 0
-        if autoConnect:
-            self.tryConnect()
+        if auto_connect:
+            self.try_connect()
 
-    def onConnect(self, onConnect):
-        self._onConnect = onConnect
+    def on_connect(self, on_connect):
+        self._onConnect = on_connect
 
-    def onDisconnect(self, onDisconnect):
-        self._onDisconnect = onDisconnect
+    def on_disconnect(self, on_disconnect):
+        self._on_disconnect = on_disconnect
 
-    def tryConnect(self):
+    def try_connect(self):
         if not self._active:
-            global _activePowerSupply
-            _activePowerSupply = self
+            global _active_power_supply
+            _active_power_supply = self
             self._active = True
             threading.Thread(target=self._daemon, daemon=True).start()
         return self
 
     def kill(self):
-        if self.isConnected():
+        if self.is_connected():
             self._instr.write("INP:STOP\n")  # Disable DC input
         self._active = False
 
-    def _checkForDisconnect(self):
+    def _check_for_disconnect(self):
         try:
             self._instr.session
         except pyvisa.errors.InvalidSession:
@@ -342,7 +373,7 @@ class PowerSupply:
     def _connect(self):
         try:
             self._instr = self._rm.open_resource(self._resourceName)
-            self._IDN = self._instr.query("*IDN?")
+            self._idn = self._instr.query("*IDN?")
             self._instr.write("CURR 0\n")  # Set the current to zero before enabling DC input
             self._instr.write("INP:START\n")  # Enable DC input
             self._onConnect()
@@ -357,64 +388,64 @@ class PowerSupply:
             pass
 
     def _daemon(self):
-        global _activePowerSupply
+        global _active_power_supply
         while self._active:
-            if not self is _activePowerSupply:
+            if self is not _active_power_supply:
                 self.kill()
                 break
-            self._checkForDisconnect()
-            if self.isConnected():
+            self._check_for_disconnect()
+            if self.is_connected():
                 self._refresh()
             else:
                 self._connect()
-            if self._lastConnected and not self.isConnected():
-                self._onDisconnect()
-            self._lastConnected = self.isConnected()
+            if self._last_connected and not self.is_connected():
+                self._on_disconnect()
+            self._last_connected = self.is_connected()
             time.sleep(0.1)  # Sleep to save CPU time
 
-    def getIDN(self):
-        return self._IDN
+    def get_idn(self):
+        return self._idn
 
-    def applyCurrentLimit(self, limit):
-        if self.isConnected():
+    def apply_current_limit(self, limit):
+        if self.is_connected():
             self._currentLimit = limit
             self._instr.write(f"SOUR: CURR {limit}\n")
 
-    def setVoltage(self, voltage: float):
-        if self.isConnected():
-            self._targetVoltage = voltage
+    def set_voltage(self, voltage: float):
+        self._targetVoltage = voltage
+        if self.is_connected():
             self._instr.write(f"VOLT {voltage}\n")
 
-    def setCurrent(self, current: float):
-        if self.isConnected():
+    def set_current(self, current: float):
+        if self.is_connected():
             self._targetCurrent = current
             self._instr.write(f"CURR {current}\n")
 
-    def getVoltage(self):
+    def get_voltage(self):
         return self._voltage
 
-    def getCurrent(self):
+    def get_current(self):
         return self._current
 
-    def getTargetVoltage(self):
+    def get_target_voltage(self):
         return self._targetVoltage
 
-    def getTargetCurrent(self):
+    def get_target_current(self):
         return self._targetCurrent
 
-    def getPower(self):
-        if self.isConnected():
-            return self.getCurrent() * self.getVoltage()
+    def get_power(self):
+        if self.is_connected():
+            return self.get_current() * self.get_voltage()
         else:
             return 0
 
-    def writeCommand(self, command: str):
-        if self.isConnected():
+    def write_command(self, command: str):
+        if self.is_connected():
             self._instr.write(command)
 
     def query(self, query: str):
-        if self.isConnected():
+        if self.is_connected():
             return self._instr.query(query)
 
-    def isConnected(self):
+    def is_connected(self):
         return self._instr is not None

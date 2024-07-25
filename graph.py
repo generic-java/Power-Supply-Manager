@@ -8,6 +8,7 @@ from tkutils import *
 class Graph(Thread):
     def __init__(self, master, data_count: int, legend=None):
         super().__init__(daemon=True)
+        self.name = "graph thread"
         if legend is None:
             legend = []
         self.font = FontProperties(fname=APPLICATION_FONT_PATH)
@@ -29,7 +30,6 @@ class Graph(Thread):
             self._lines.append(self._ax.plot([], [], label=label, color=self._line_colors[i])[0])
             if legend:
                 plt.legend(loc="upper right", prop=self.font)
-        self._active = True
         self.start()
 
     def add_to(self, index, x, y):
@@ -58,11 +58,8 @@ class Graph(Thread):
     def get_widget(self):
         return self._canvas.get_tk_widget()
 
-    def __del__(self):
-        self._active = False
-
     def run(self):
-        while self._active:
+        while True:
             try:
                 if self._refresh_requested:
                     for i in range(len(self._data_series)):

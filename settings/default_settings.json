@@ -1,0 +1,9 @@
+{
+  "machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR",
+  "fileURI": "",
+  "dataStoragePath": "",
+  "profileType": "Evenly spaced",
+  "controlType": 0,
+  "testTime": 10,
+  "resetVoltage": true
+}

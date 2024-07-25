@@ -81,6 +81,10 @@ PLAY_PAUSE = (50, 50)
 _images = []
 
 
+def schedule(function, waitTimeMs=0):
+    window.after(waitTimeMs, function)
+
+
 def simple_tk_callback(func):
     def callback(*args):
         func()
@@ -141,7 +145,7 @@ def label_menu_group(master, label_text, *options):
     return frame, menu
 
 
-def spacer(master, width):
+def spacer(master, width=0, height=0):
     return tk.Frame(master, width=width, background=GRAY)
 
 
@@ -245,7 +249,7 @@ class Menu:
     def select_option(self, chosen_option: str):
         has_option = False
         for option in self.options:
-            if chosen_option == option:
+            if chosen_option==option:
                 has_option = True
         if not has_option:
             raise AttributeError(f"Menu object has no '{chosen_option}' option")
@@ -287,7 +291,7 @@ class HighlightedButtonPair:
         self._highlighted = None
         self.select(highlighted)
         self.first_button.grid(row=0, column=0)
-        spacer(self.frame, 5).grid(row=0, column=1)
+        spacer(self.frame, width=5).grid(row=0, column=1)
         self.second_button.grid(row=0, column=2)
 
     def get_highlighted_button(self):
@@ -295,23 +299,24 @@ class HighlightedButtonPair:
 
     def select(self, target):
         current = self._highlighted
-        if 2 > target == int(target):
+        if 2 > target==int(target):
             self._highlighted = target
         else:
             raise AttributeError("The value of the '_highlighted' argument must be an integer of 0 or 1")
-        if target == 0:
+        if target==0:
             self.second_button.config(**UNHIGHLIGHTED_BUTTON)
             self.first_button.config(**DEFAULT_BUTTON)
         else:
             self.first_button.config(**UNHIGHLIGHTED_BUTTON)
             self.second_button.config(**DEFAULT_BUTTON)
-        if current != self._highlighted:
+        if current!=self._highlighted:
             self._on_switch(self._highlighted)
 
 
 class ProgressBar(Thread):
     def __init__(self, master, size: tuple[float, float], animated=False):
-        super().__init__(daemon=True)
+        super().__init__()
+        self.name = "progress bar thread"
         self.daemon = True
         self._size = size
         self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2, highlightbackground=BLUE)
@@ -320,7 +325,6 @@ class ProgressBar(Thread):
         self._displayed_progress = 0
         self._last_displayed_progress = 0
         self._animated = animated
-        self._active = True
         self.start()
 
     def reset(self):
@@ -336,11 +340,8 @@ class ProgressBar(Thread):
             if not self._animated:
                 self._displayed_progress = self._progress_percent
 
-    def __del__(self):
-        self._active = False
-        
     def run(self):
-        while self._active:
+        while True:
             try:
                 self._displayed_progress += (self._progress_percent - self._displayed_progress) / 10
                 if self._last_displayed_progress > self._displayed_progress:

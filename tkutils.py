@@ -294,7 +294,7 @@ class HighlightedButtonPair:
         spacer(self.frame, width=5).grid(row=0, column=1)
         self.second_button.grid(row=0, column=2)
 
-    def get_highlighted_button(self):
+    def get_highlighted_button(self) -> int:
         return self._highlighted
 
     def select(self, target):

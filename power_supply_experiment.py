@@ -42,6 +42,7 @@ class Timer:
         self._elapsed_time_on_pause = 0
         self._pause_start = 0
         self._time_paused = 0
+        self._paused = False
 
     def elapsed_time_seconds(self):
         if self._paused:
@@ -69,10 +70,10 @@ class Timer:
 
 
 class PIDController:
-    def __init__(self, k_p, k_i, k_d, integral_reset=True):
-        self.k_p = k_p
-        self.k_i = k_i
-        self.k_d = k_d
+    def __init__(self, kp, ki, kd, integral_reset=True):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
         self.integral = 0
         self.last_time = None
         self.last_measurement = None
@@ -100,12 +101,12 @@ class PIDController:
                 and self.integral_reset
         ):
             self.integral = 0
-        self.integral += self.k_i * error * dt
+        self.integral += self.ki * error * dt
         if dt==0:
             d_term = 0
         else:
-            d_term = self.k_p * dx / dt
-        return self.k_p * error + self.integral + d_term
+            d_term = self.kp * dx / dt
+        return self.kp * error + self.integral + d_term
 
 
 class Profile:
@@ -194,18 +195,17 @@ class Experiment(Thread):
         global _active_exp
         _active_exp = self
         self._power_supply = _active_power_supply
+        self._active = False
+        self._paused = False
         for key in kwargs:
             self.__dict__[key] = kwargs[key]
         self.data = []
         self._profile = Profile(kwargs["profile_file_path"], Profile.EVENLY_SPACED, kwargs["run_time"])
-        self.targetVoltage = 0
         self._time = Timer()
         self._absolute_time = Timer()
         self._progress = 0
         self.set_run_mode(kwargs["run_mode"])
         self._controller = PIDController(0, 0, 0, integral_reset=True)
-        self._active = False
-        self._paused = False
 
 
     def __getitem__(self, item):
@@ -258,6 +258,8 @@ class Experiment(Thread):
         self["progress_bar"].reset()
         self["progress_readout"].update("0.00%")
         self._time.reset()
+        if self._run_mode==Experiment.MANUAL:
+            self._time.pause()
         self._absolute_time.reset()
         i = 0
         setpoints = self._profile.get_setpoints()
@@ -267,17 +269,19 @@ class Experiment(Thread):
                 sleep_until(
                     lambda: self._time.elapsed_time_seconds() > scheduled_time or self._run_mode==Experiment.MANUAL)
                 if self._run_mode==Experiment.AUTOMATIC:
-                    target_voltage = max(target_voltage, 0)
-                    self.targetVoltage = target_voltage
-                    self._power_supply.set_voltage(self.targetVoltage)
-                    i += 1
+                    self._power_supply.set_volts(max(target_voltage, 0))
                     self._progress = self._profile.calculate_progress(i)
+                    i += 1
                     self["graph"].add_to(0, scheduled_time + self._time.get_time_paused(), target_voltage)
                     if i==len(setpoints):
                         break
             else:
-                calculated_volts_increase = self._controller.calculate(self._power_supply.get_power(), float(self["target_power"].get()))
-                self._power_supply.set_voltage(self._power_supply.get_target_volts() + calculated_volts_increase)
+                try:
+                    target_power = float(self["target_power"].get())
+                except ValueError:
+                    target_power = 0
+                calculated_volts_increase = self._controller.calculate(self._power_supply.get_power(), target_power)
+                self._power_supply.set_volts(self._power_supply.get_target_volts() + calculated_volts_increase)
                 time.sleep(0.01)
 
     def _save_experiment_data(self):
@@ -312,6 +316,18 @@ class Experiment(Thread):
 
             tkutils.schedule(retry, 0)
 
+    def _estimate_voltage(self):
+        try:
+            target_power = float(self["target_power"].get())
+        except ValueError:
+            target_power = 0
+        current = self._power_supply.get_current()
+        if current==0:
+            target_volts = 0
+        else:
+            target_volts = target_power / current
+        return target_volts
+
     def set_run_mode(self, run_mode: int):
         if run_mode > 1:
             raise AttributeError(f"Expected to receive a code for automatic (0) or manual (1) but got '{run_mode}'")
@@ -319,8 +335,10 @@ class Experiment(Thread):
             self._run_mode = run_mode
             if self._run_mode==Experiment.MANUAL:
                 self._time.pause()
+                self._power_supply.set_volts(self._estimate_voltage())
             else:
-                self._time.unpause()
+                if not self._paused:
+                    self._time.unpause()
 
     def run(self):
         self._active = True
@@ -328,13 +346,16 @@ class Experiment(Thread):
         end_at_zero = self["end_at_zero"].get()
         threading.Thread(target=self._update_displays, daemon=True).start()
         threading.Thread(target=self._update_time_display, daemon=True).start()
+        if self._run_mode==Experiment.MANUAL:
+            self._power_supply.set_volts(self._estimate_voltage())
+            time.sleep(0.5)
         self._run_experiment()
         if end_at_zero:
-            self._power_supply.set_voltage(0)
+            self._power_supply.set_volts(0)
             self._update_displays()
         if self._active:
+            time.sleep(0.05)
             self["progress_readout"].recolor(FINISHED_GREEN)
-            self["progress_readout"].update("100.00%")
             self["on_finish"]()
             self._save_experiment_data()
             self._active = False
@@ -438,7 +459,7 @@ class PowerSupply:
             self._currentLimit = limit
             self._instr.write(f"SOUR: CURR {limit}\n")
 
-    def set_voltage(self, voltage: float | str):
+    def set_volts(self, voltage: float | str):
         self._targetVoltage = voltage
         if self.is_connected():
             self._instr.write(f"VOLT {voltage}\n")

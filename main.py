@@ -2,7 +2,7 @@
 Created: 6/20/24
 Author: Samuel Geelhood
 Program: Wright Scholars
-Mentor: Dr. Steve Adams
+Mentor: Dr. Steven Adams
 Location: Wright-Patterson Air Force Base
 """
 
@@ -24,24 +24,17 @@ from power_supply_experiment import (
 )
 from tkutils import *
 
-load_dotenv("settings/config.env")
+load_dotenv("settings\\config.env")
 
 window_size = (os.getenv("WINDOW_WIDTH"), os.getenv("WINDOW_HEIGHT"))
-
-DEFAULT_SETTINGS = {
-    "machineAddress": "TCPIP0::169.254.197.112::inst0::INSTR",
-    "fileURI": "",
-    "dataStoragePath": "",
-    "profileType": "Evenly spaced",
-    "controlType": 0,
-    "testTime": 10,
-    "resetVoltage": True,
-}
-
-DEFAULT_SPACING = 12
-
-settings_dir = "./settings"
+settings_dir = ".\\settings"
 settings_file_name = "user_data.json"
+default_settings_file_name = "default_settings.json"
+
+with open(f"{settings_dir}\\{default_settings_file_name}", "r") as default_settings_file:
+    DEFAULT_SETTINGS = json.load(default_settings_file)
+
+DEFAULT_VERTICAL_SPACING = os.getenv("DEFAULT_VERTICAL_SPACING")
 
 
 def main():
@@ -100,7 +93,7 @@ def main():
             "on_finish": on_experiment_end,
             "graph": graph,
             "target_power": target_power_input,
-            "run_mode": settings["controlType"]
+            "run_mode": control_type_toggle.get_highlighted_button()
         }
         Experiment(**experiment_settings).start()
         window.after(50, lambda: stop_button_frame.grid(row=0, column=1))
@@ -130,29 +123,36 @@ def main():
         stop_button_frame.grid_forget()
 
     def save_settings():
+        def verify_is_number(num: str, dict_value):
+            try:
+                float(num)
+                dict_value = num
+            except ValueError:
+                pass
+
         if not os.path.isdir(settings_dir):
             os.mkdir(settings_dir)
         with open(f"{settings_dir}/{settings_file_name}", "w") as file:
             to_save = DEFAULT_SETTINGS.copy()
             if machine_address.get()!="":
-                to_save["machineAddress"] = machine_address.get()
+                to_save["machine_address"] = machine_address.get()
             if os.path.isfile(file_path.get()):
-                to_save["fileURI"] = file_path.get()
+                to_save["profile_file_path"] = file_path.get()
             if os.path.exists(folder_path.get()):
-                to_save["dataStoragePath"] = folder_path.get()
-            to_save["profileType"] = profile_menu.get_selected_option()
-            to_save["controlType"] = control_type_toggle.get_highlighted_button()
-            try:
-                float(time_input.get())
-                to_save["testTime"] = time_input.get()
-            finally:
-                to_save["resetVoltage"] = reset_voltage.get()
+                to_save["data_storage_folder_path"] = folder_path.get()
+            to_save["profile_type"] = profile_menu.get_selected_option()
+            to_save["control_type"] = control_type_toggle.get_highlighted_button()
+            verify_is_number(time_input.get(), to_save["test_time"])
+            verify_is_number(kp_entry.get(), to_save["kp"])
+            verify_is_number(ki_entry.get(), to_save["ki"])
+            verify_is_number(kd_entry.get(), to_save["kd"])
+            to_save["reset_voltage"] = reset_voltage.get()
             json.dump(to_save, file)
 
     def load_settings():
         try:
-            with open(f"{settings_dir}/{settings_file_name}", "r") as file:
-                return json.load(file)
+            with open(f"{settings_dir}\\{settings_file_name}", "r") as settings_file:
+                return json.load(settings_file)
         except (json.JSONDecodeError, FileNotFoundError):
             return DEFAULT_SETTINGS
 
@@ -175,7 +175,7 @@ def main():
 
     # Region machine address chooser (row 0)
     machine_addr_chooser_container, machine_address = label_entry_group(
-        experiment_config_frame, settings["machineAddress"], 78, "Machine address"
+        experiment_config_frame, settings["machine_address"], 90, "Machine address"
     )
     make_text_widget(
         "Button",
@@ -183,7 +183,7 @@ def main():
         "Connect",
         command=lambda: new_power_supply(machine_address.get()),
     ).grid(row=0, column=2, padx=20)
-    machine_addr_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    machine_addr_chooser_container.config(pady=DEFAULT_VERTICAL_SPACING, background=GRAY)
     machine_addr_chooser_container.grid(row=0, column=0, sticky=tk.W)
 
     # End region
@@ -195,7 +195,7 @@ def main():
             folder_path.set(directory)
 
     folder_chooser_container, folder_path = label_entry_group(
-        experiment_config_frame, settings["dataStoragePath"], 70, "Data storage location"
+        experiment_config_frame, settings["data_storage_folder_path"], 78, "Data storage location"
     )
     make_text_widget(
         "Button",
@@ -203,7 +203,7 @@ def main():
         "Choose folder",
         command=lambda: set_storage_folder_path(),
     ).grid(row=0, column=2, padx=20)
-    folder_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    folder_chooser_container.config(pady=DEFAULT_VERTICAL_SPACING, background=GRAY)
     folder_chooser_container.grid(row=1, column=0, sticky=tk.W)
 
     # End region
@@ -215,12 +215,12 @@ def main():
             file_path.set(directory)
 
     file_chooser_container, file_path = label_entry_group(
-        experiment_config_frame, settings["fileURI"], 77, "Profile file path"
+        experiment_config_frame, settings["profile_file_path"], 84, "Profile file path"
     )
     make_text_widget(
         "Button", file_chooser_container, "Choose file", command=set_profile_file_path
     ).grid(row=0, column=2, padx=20)
-    file_chooser_container.config(pady=DEFAULT_SPACING, background=GRAY)
+    file_chooser_container.config(pady=DEFAULT_VERTICAL_SPACING, background=GRAY)
     file_chooser_container.grid(row=2, column=0, sticky=tk.W)
 
     # End region
@@ -238,24 +238,70 @@ def main():
     )
 
     time_input_container, time_input = label_entry_group(
-        profile_manager_frame, settings["testTime"], 4, "Test time (s)"
+        profile_manager_frame, settings["test_time"], 4, "Test time (s)"
     )
     time_input_container.config(background=GRAY)
 
     profile_menu.on_option_select(toggle_time_input_visibility)
-    profile_menu.select_option(settings["profileType"])
-    profile_manager_frame.config(background=GRAY, pady=DEFAULT_SPACING)
+    profile_menu.select_option(settings["profile_type"])
+
+    check_container, reset_voltage = label_switch_group(profile_manager_frame, "Set voltage to zero at experiment end")
+    reset_voltage.set(bool(settings["reset_voltage"]))
+    check_container.config(background=GRAY)
+    check_container.grid(row=0, column=3)
+
+    profile_manager_frame.config(background=GRAY, pady=DEFAULT_VERTICAL_SPACING)
     profile_manager_frame.grid(row=3, column=0, sticky=tk.W)
     # End region
 
-    # Region reset voltage switch
-    check_container, reset_voltage = label_switch_group(profile_manager_frame, "Set voltage to zero at experiment end")
-    reset_voltage.set(bool(settings["resetVoltage"]))
-    check_container.config(background=GRAY)
-    check_container.grid(row=0, column=3)
+    # Region connection status (row 4)
+    tk.Label(experiment_config_frame, textvariable=connection_status, padx=20, pady=DEFAULT_VERTICAL_SPACING, **DEFAULT_LABEL).grid(row=4, column=0, sticky=tk.W)
     # End region
 
-    # Region play, pause, and stop buttons
+    # Region control type chooser (row 5)
+    control_type_frame = tk.Frame(experiment_config_frame, padx=20, pady=20, background=GRAY)
+
+    manual_control_frame = tk.Frame(control_type_frame)
+
+    target_power_container, target_power_input = label_entry_group(manual_control_frame, 0, 4, "Target power (W)")
+    target_power_container.config(background=GRAY)
+    target_power_container.grid(row=0, column=0)
+
+    def toggle_target_power_visibility(highlighted: int):
+        active_experiment = get_active_experiment()
+        if highlighted==0:
+            manual_control_frame.grid_forget()
+            if active_experiment is not None:
+                active_experiment.set_run_mode(Experiment.AUTOMATIC)
+        else:
+            manual_control_frame.grid(row=0, column=1)
+            if active_experiment is not None:
+                active_experiment.set_run_mode(Experiment.MANUAL)
+
+    control_type_toggle = HighlightedButtonPair(
+        control_type_frame,
+        "Automatic control",
+        "Manual control",
+        onSwitch=toggle_target_power_visibility,
+    )
+    control_type_toggle.select(settings["control_type"])
+    control_type_toggle.frame.grid(row=0, column=0)
+
+    pid_gains = tk.Frame(manual_control_frame)
+
+    kp_frame, kp_entry = label_entry_group(pid_gains, "0", 4, "kP")
+    kp_frame.grid(row=0, column=0)
+    ki_frame, ki_entry = label_entry_group(pid_gains, "0", 4, "kI")
+    ki_frame.grid(row=0, column=1)
+    kd_frame, kd_entry = label_entry_group(pid_gains, "0", 4, "kD")
+    kd_frame.grid(row=0, column=2)
+
+    pid_gains.grid(row=0, column=1)
+
+    control_type_frame.grid(row=5, column=0, sticky=tk.W)
+    # End region
+
+    # Region play, pause, and stop buttons (row 6)
     experiment_manager_frame = tk.Frame(experiment_config_frame, background=GRAY)
     control_button_frame = tk.Frame(
         experiment_manager_frame, height=50, background=GRAY, padx=20
@@ -282,54 +328,10 @@ def main():
     spacer(progress_frame, width=20).grid(row=0, column=1)
     progress_bar.bar.grid(row=0, column=2)
     progress_readout.get_label().grid(row=0, column=3)
-    experiment_manager_frame.grid(row=5, column=0, sticky=tk.W)
+    experiment_manager_frame.grid(row=6, column=0, sticky=tk.W)
     # End region
 
-
-    # Region control type chooser (row 4)
-    control_type_frame = tk.Frame(experiment_config_frame, padx=20, pady=20, background=GRAY)
-
-    manual_control_frame = tk.Frame(control_type_frame)
-
-    target_power_container, target_power_input = label_entry_group(manual_control_frame, 0, 4, "Target power (W)")
-    target_power_container.config(background=GRAY)
-    target_power_container.grid(row=0, column=0)
-
-    def toggle_target_power_visibility(highlighted: int):
-        active_experiment = get_active_experiment()
-        if highlighted==0:
-            manual_control_frame.grid_forget()
-            if active_experiment is not None:
-                active_experiment.set_run_mode(Experiment.AUTOMATIC)
-        else:
-            manual_control_frame.grid(row=0, column=1)
-            if active_experiment is not None:
-                active_experiment.set_run_mode(Experiment.MANUAL)
-
-    control_type_toggle = HighlightedButtonPair(
-        control_type_frame,
-        "Automatic control",
-        "Manual control",
-        onSwitch=toggle_target_power_visibility,
-    )
-    control_type_toggle.select(settings["controlType"])
-    control_type_toggle.frame.grid(row=0, column=0)
-
-    pid_gains = tk.Frame(manual_control_frame)
-
-    kp_frame, kp_entry = label_entry_group(pid_gains, "0", 4, "kP")
-    kp_frame.grid(row=0, column=0)
-    ki_frame, ki_entry = label_entry_group(pid_gains, "0", 4, "kI")
-    ki_frame.grid(row=0, column=1)
-    kd_frame, kd_entry = label_entry_group(pid_gains, "0", 4, "kD")
-    kd_frame.grid(row=0, column=2)
-
-    pid_gains.grid(row=0, column=1)
-
-    control_type_frame.grid(row=4, column=0, sticky=tk.W)
-    # End region
-
-    experiment_config_frame.place(x=0, y=0, anchor=tk.NW)
+    experiment_config_frame.place(relx=0.5, y=0, anchor=tk.N)
 
     # Region experiment information display
     experiment_display = tk.Frame(window, background=GRAY, pady=20)
@@ -366,19 +368,12 @@ def main():
     graph = Graph(experiment_display, 4, ["Target voltage", "Actual voltage", "Current", "Power (W)"])
     graph.get_widget().grid(row=0, column=0)
     readout_container.grid(row=0, column=1)
-    readout_container.grid_propagate(0)
+    readout_container.grid_propagate(False)
 
     experiment_display.place(relx=0.5, rely=1, anchor=tk.S)
     # End region
 
-    # Region connection status
-    tk.Label(window, textvariable=connection_status, **DEFAULT_LABEL).place(
-        relx=0.5, y=750, anchor=tk.CENTER
-    )
-    # End region
-
-
-    window.after(100, lambda: new_power_supply(machine_address.get()))
+    window.after(500, lambda: new_power_supply(machine_address.get()))
 
     def exit_program():
         kill_active_experiment()

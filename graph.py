@@ -12,7 +12,7 @@ class Graph(Thread):
         if legend is None:
             legend = []
         self.font = FontProperties(fname=APPLICATION_FONT_PATH)
-        self._figure = plt.figure(figsize=(10, 5), facecolor=GRAY)
+        self._figure = plt.figure(figsize=(10, 4), facecolor=GRAY)
         self._ax = self._figure.add_subplot()
         self._ax.tick_params(colors=BLUE)
         self._ax.set_xlabel('Elapsed time', fontproperties=self.font, color=BLUE, labelpad=15)

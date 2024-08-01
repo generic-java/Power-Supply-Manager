@@ -80,6 +80,11 @@ class PIDController:
         self.last_setpoint = None
         self.integral_reset = integral_reset
 
+    def set_gains(self, kp, ki, kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+
     def calculate(self, measurement, setpoint):
         current_time = time.time()
         if self.last_time is None:
@@ -105,7 +110,7 @@ class PIDController:
         if dt==0:
             d_term = 0
         else:
-            d_term = self.kp * dx / dt
+            d_term = self.kd * dx / dt
         return self.kp * error + self.integral + d_term
 
 
@@ -183,6 +188,13 @@ def sleep_until(func, sleep_time=0.001):
         time.sleep(sleep_time)
 
 
+def _get_num(num: str, default=0):
+    try:
+        return float(num)
+    except ValueError:
+        return default
+
+
 class Experiment(Thread):
     AUTOMATIC = 0
     MANUAL = 1
@@ -205,8 +217,7 @@ class Experiment(Thread):
         self._absolute_time = Timer()
         self._progress = 0
         self.set_run_mode(kwargs["run_mode"])
-        self._controller = PIDController(0, 0, 0, integral_reset=True)
-
+        self._controller = PIDController(_get_num(self["kp"].get()), _get_num(self["ki"].get()), _get_num(self["kd"].get()), integral_reset=True)
 
     def __getitem__(self, item):
         return self.__dict__[item]
@@ -276,13 +287,12 @@ class Experiment(Thread):
                     if i==len(setpoints):
                         break
             else:
-                try:
-                    target_power = float(self["target_power"].get())
-                except ValueError:
-                    target_power = 0
+                target_power = _get_num(self["target_power"].get())
+                self._controller.set_gains(_get_num(self["kp"].get()), _get_num(self["ki"].get()), _get_num(self["kd"].get()))
                 calculated_volts_increase = self._controller.calculate(self._power_supply.get_power(), target_power)
-                self._power_supply.set_volts(self._power_supply.get_target_volts() + calculated_volts_increase)
-                time.sleep(0.01)
+                self._power_supply.set_volts(min(self._power_supply.get_target_volts() + calculated_volts_increase, 200))
+                self["graph"].add_to(0, self._absolute_time.elapsed_time_seconds(), min(self._power_supply.get_target_volts() + calculated_volts_increase, 200))
+                time.sleep(0.1)
 
     def _save_experiment_data(self):
         now = datetime.now()
@@ -291,7 +301,8 @@ class Experiment(Thread):
             folder_path = askdirectory(title="Data storage directory")
             self["data_storage_folder_path"].set(folder_path)
         try:
-            with open(f"{folder_path}/experiment-{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}.csv", "w", newline="") as file:
+            with open(f"{folder_path}/experiment-{now.year}-{now.month}-{now.day}_{now.hour}-{now.minute}.csv", "w",
+                    newline="") as file:
                 writer = csv.writer(file, delimiter=",")
                 writer.writerow(
                     [
@@ -372,7 +383,8 @@ def get_active_power_supply():
 
 
 class PowerSupply:
-    def __init__(self, resource_name: str, auto_connect: bool = False, on_connect=lambda: None, on_disconnect=lambda: None):
+    def __init__(self, resource_name: str, auto_connect: bool = False, on_connect=lambda: None,
+                 on_disconnect=lambda: None):
         self._instr = None
         self._resourceName = resource_name
         self._rm = pyvisa.ResourceManager()
@@ -421,17 +433,21 @@ class PowerSupply:
         try:
             self._instr = self._rm.open_resource(self._resourceName)
             self._idn = self._instr.query("*IDN?")
+            time.sleep(0.1)
             self._instr.write("CURR 0\n")  # Set the current to zero before enabling DC input
             self._instr.write("INP:START\n")  # Enable DC input
             self._onConnect()
-        except pyvisa.errors.VisaIOError:
+        except (pyvisa.errors.VisaIOError, pyvisa.errors.InvalidSession):
             pass
 
     def _refresh(self):
         try:
             self._voltage = float(self.query("MEASure:VOLTage?\n"))
             self._current = float(self.query("MEASure:CURRent?\n"))
-            self._resistance = self._voltage / self._current
+            if self._current==0:
+                self._resistance = float("inf")
+            else:
+                self._resistance = self._voltage / self._current
         except ValueError:
             pass
 
@@ -460,7 +476,7 @@ class PowerSupply:
             self._instr.write(f"SOUR: CURR {limit}\n")
 
     def set_volts(self, voltage: float | str):
-        self._targetVoltage = voltage
+        self._targetVoltage = max(voltage, 0)
         if self.is_connected():
             self._instr.write(f"VOLT {voltage}\n")
 

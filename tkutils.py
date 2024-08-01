@@ -107,7 +107,8 @@ def make_text_widget_ex(class_type: str, master: tk.Misc, text: str, **kwargs) -
     string_var.set(text)
     kwargs["textvariable"] = string_var
     try:
-        return getattr(tk, class_type)(master, **kwargs, **_get_default_dict(class_type)), string_var  # Gets the module attribute with the given class name and creates an instance of it
+        return getattr(tk, class_type)(master, **kwargs, **_get_default_dict(
+            class_type)), string_var  # Gets the module attribute with the given class name and creates an instance of it
     except AttributeError:
         raise AttributeError("The tkinter module has no \"" + class_type + "\" class")
 
@@ -151,7 +152,8 @@ def spacer(master, width=0, height=0):
 
 def make_img_button(master, image_path, size, command=lambda *args: None):
     img = ImageTk.PhotoImage(Image.open(image_path).resize(size))
-    _images.append(img)  # If this isn't stored somewhere permanently, it will be garbage collected and tk will not show it
+    _images.append(
+        img)  # If this isn't stored somewhere permanently, it will be garbage collected and tk will not show it
     button = tk.Button(master, bd=-1, background=GRAY, activebackground=GRAY, image=img, command=command)
     return button
 
@@ -249,7 +251,7 @@ class Menu:
     def select_option(self, chosen_option: str):
         has_option = False
         for option in self.options:
-            if chosen_option==option:
+            if chosen_option == option:
                 has_option = True
         if not has_option:
             raise AttributeError(f"Menu object has no '{chosen_option}' option")
@@ -267,7 +269,9 @@ class Menu:
             if not self._mouse_over_menu_frame:
                 self._hide()
         elif self._mouse_over_btn:
-            self._menu_frame.place(x=self.menu_button.winfo_rootx() - window.winfo_rootx(), y=self.menu_button.winfo_rooty() - window.winfo_rooty() + self.menu_button.winfo_height(), anchor=tk.NW)
+            self._menu_frame.place(x=self.menu_button.winfo_rootx() - window.winfo_rootx(),
+                                   y=self.menu_button.winfo_rooty() - window.winfo_rooty() + self.menu_button.winfo_height(),
+                                   anchor=tk.NW)
             self._menu_frame.config(padx=0)
             for i in range(10):
                 self._menu_frame.lift()
@@ -275,7 +279,8 @@ class Menu:
 
 
 class HighlightedButtonPair:
-    def __init__(self, master, first_button_text, second_button_text, highlighted: int = 0, first_button_command=lambda: None, second_button_command=lambda: None, onSwitch=lambda i: None):
+    def __init__(self, master, first_button_text, second_button_text, highlighted: int = 0,
+                 first_button_command=lambda: None, second_button_command=lambda: None, onSwitch=lambda i: None):
         self.frame = tk.Frame(master, padx=5, pady=5, background=GRAY, highlightbackground=BLUE, highlightthickness=2)
 
         def make_btn_cmd(cmd, target):
@@ -286,8 +291,10 @@ class HighlightedButtonPair:
             return newCmd
 
         self._on_switch = onSwitch
-        self.first_button = make_text_widget("Button", self.frame, first_button_text, command=make_btn_cmd(first_button_command, target=0))
-        self.second_button = make_text_widget("Button", self.frame, second_button_text, command=make_btn_cmd(second_button_command, target=1))
+        self.first_button = make_text_widget("Button", self.frame, first_button_text,
+                                             command=make_btn_cmd(first_button_command, target=0))
+        self.second_button = make_text_widget("Button", self.frame, second_button_text,
+                                              command=make_btn_cmd(second_button_command, target=1))
         self._highlighted = None
         self.select(highlighted)
         self.first_button.grid(row=0, column=0)
@@ -299,17 +306,17 @@ class HighlightedButtonPair:
 
     def select(self, target):
         current = self._highlighted
-        if 2 > target==int(target):
+        if 2 > target == int(target):
             self._highlighted = target
         else:
             raise AttributeError("The value of the '_highlighted' argument must be an integer of 0 or 1")
-        if target==0:
+        if target == 0:
             self.second_button.config(**UNHIGHLIGHTED_BUTTON)
             self.first_button.config(**DEFAULT_BUTTON)
         else:
             self.first_button.config(**UNHIGHLIGHTED_BUTTON)
             self.second_button.config(**DEFAULT_BUTTON)
-        if current!=self._highlighted:
+        if current != self._highlighted:
             self._on_switch(self._highlighted)
 
 
@@ -319,7 +326,8 @@ class ProgressBar(Thread):
         self.name = "progress bar thread"
         self.daemon = True
         self._size = size
-        self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2, highlightbackground=BLUE)
+        self.bar = tk.Canvas(master, width=size[0], height=size[1], background=GRAY, highlightthickness=2,
+                             highlightbackground=BLUE)
         self.bar.create_rectangle((0, 0), self._size, fill=GRAY)
         self._progress_percent = 0
         self._displayed_progress = 0
@@ -346,7 +354,8 @@ class ProgressBar(Thread):
                 self._displayed_progress += (self._progress_percent - self._displayed_progress) / 10
                 if self._last_displayed_progress > self._displayed_progress:
                     self.bar.delete("all")
-                self.bar.create_rectangle((0, 0), (self._displayed_progress * self._size[0] + 2, self._size[1] + 2), fill=BLUE)
+                self.bar.create_rectangle((0, 0), (self._displayed_progress * self._size[0] + 2, self._size[1] + 2),
+                                          fill=BLUE)
                 self._last_displayed_progress = self._displayed_progress
             except tkinter.TclError:
                 pass
@@ -368,4 +377,4 @@ class Readout:
         self._label.after(0, self._string_var.set(self._prefix + str(value)))
 
     def recolor(self, color: str):
-        self._label.config(fg=color)
+        self._label.after(0, lambda: self._label.config(fg=color))

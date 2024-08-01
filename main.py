@@ -42,10 +42,8 @@ def main():
         power_supply = PowerSupply(addr, auto_connect=False)
 
         def on_connect():
-            window.after(
-                0,
-                lambda: connection_status.set(f"Connected to {power_supply.get_idn()}"),
-            )
+            window.after(0, lambda: connection_status.set(
+                f"Connected to {power_supply.get_idn()}".strip().replace("\n", "")))
             current_limit = os.getenv("MAX_CURRENT")
             power_supply.apply_current_limit(current_limit)
             power_supply.set_current(current_limit)
@@ -93,7 +91,10 @@ def main():
             "on_finish": on_experiment_end,
             "graph": graph,
             "target_power": target_power_input,
-            "run_mode": control_type_toggle.get_highlighted_button()
+            "run_mode": control_type_toggle.get_highlighted_button(),
+            "kp": kp_entry,
+            "ki": ki_entry,
+            "kd": kd_entry,
         }
         Experiment(**experiment_settings).start()
         window.after(50, lambda: stop_button_frame.grid(row=0, column=1))
@@ -123,10 +124,10 @@ def main():
         stop_button_frame.grid_forget()
 
     def save_settings():
-        def verify_is_number(num: str, dict_value):
+        def verify_is_number(num: str, dict, key):
             try:
                 float(num)
-                dict_value = num
+                dict[key] = num
             except ValueError:
                 pass
 
@@ -142,10 +143,10 @@ def main():
                 to_save["data_storage_folder_path"] = folder_path.get()
             to_save["profile_type"] = profile_menu.get_selected_option()
             to_save["control_type"] = control_type_toggle.get_highlighted_button()
-            verify_is_number(time_input.get(), to_save["test_time"])
-            verify_is_number(kp_entry.get(), to_save["kp"])
-            verify_is_number(ki_entry.get(), to_save["ki"])
-            verify_is_number(kd_entry.get(), to_save["kd"])
+            verify_is_number(time_input.get(), to_save, "test_time")
+            verify_is_number(kp_entry.get(), to_save, "kp")
+            verify_is_number(ki_entry.get(), to_save, "ki")
+            verify_is_number(kd_entry.get(), to_save, "kd")
             to_save["reset_voltage"] = reset_voltage.get()
             json.dump(to_save, file)
 
@@ -255,7 +256,8 @@ def main():
     # End region
 
     # Region connection status (row 4)
-    tk.Label(experiment_config_frame, textvariable=connection_status, padx=20, pady=DEFAULT_VERTICAL_SPACING, **DEFAULT_LABEL).grid(row=4, column=0, sticky=tk.W)
+    tk.Label(experiment_config_frame, textvariable=connection_status, padx=20, pady=DEFAULT_VERTICAL_SPACING,
+        **DEFAULT_LABEL).grid(row=4, column=0, sticky=tk.W)
     # End region
 
     # Region control type chooser (row 5)
@@ -289,11 +291,11 @@ def main():
 
     pid_gains = tk.Frame(manual_control_frame)
 
-    kp_frame, kp_entry = label_entry_group(pid_gains, "0", 4, "kP")
+    kp_frame, kp_entry = label_entry_group(pid_gains, settings["kp"], 4, "kP")
     kp_frame.grid(row=0, column=0)
-    ki_frame, ki_entry = label_entry_group(pid_gains, "0", 4, "kI")
+    ki_frame, ki_entry = label_entry_group(pid_gains, settings["ki"], 4, "kI")
     ki_frame.grid(row=0, column=1)
-    kd_frame, kd_entry = label_entry_group(pid_gains, "0", 4, "kD")
+    kd_frame, kd_entry = label_entry_group(pid_gains, settings["kd"], 4, "kD")
     kd_frame.grid(row=0, column=2)
 
     pid_gains.grid(row=0, column=1)
@@ -380,7 +382,6 @@ def main():
         save_settings()
         window.destroy()
         window.quit()
-
 
     window.protocol("WM_DELETE_WINDOW", exit_program)
     window.mainloop()

@@ -1,4 +1,5 @@
 import csv
+import math
 import os
 import threading
 from datetime import datetime
@@ -115,10 +116,11 @@ class PIDController:
 
 
 class Profile:
-    EVENLY_SPACED = 0
-    ORDERED_PAIRS = 1
+    EVENLY_SPACED = "Evenly spaced"
+    ORDERED_PAIRS = "Ordered pairs"
+    CUSTOM = "Custom"
 
-    def __init__(self, profile_file_path: tkinter.StringVar, profile_type: int, total_test_time: tkinter.StringVar = 0):
+    def __init__(self, profile_file_path: tkinter.StringVar, profile_type: int, total_test_time: tkinter.StringVar = 0, repeat: int = 1, profile=((0, 0), (0, 1), (0, 2)), delay_time=0, step=0.25):
         self.index = -1
         self.profile_file_path = profile_file_path
         self.profile_type = profile_type
@@ -126,7 +128,36 @@ class Profile:
         self._points = []
         self._time_values = []
         self._setpoint_values = []
-        self._read_csv(self.profile_file_path.get())
+        if profile_type==Profile.CUSTOM:
+            if step==0:
+                step = 0.25
+            first_dt = profile[1][1]
+            second_dt = profile[2][1] - profile[1][1]
+            first_points = math.floor(first_dt / step)
+            second_points = math.floor(second_dt / step)
+            for i in range(first_points):
+                point = [profile[0][0] + i * step / first_dt * (profile[1][0] - profile[0][0]), i * step]
+                self._points.append(point)
+            self._points.append(profile[1])
+            for i in range(second_points):
+                point = [profile[1][0] + i * step / first_dt * (profile[2][0] - profile[1][0]), profile[1][1] + i * step]
+                self._points.append(point)
+            self._points.append(profile[2])
+
+            for volts, t in self._points:
+                self._time_values.append(t)
+                self._setpoint_values.append(volts)
+        else:
+            self._read_csv(self.profile_file_path.get())
+        temp = self._points.copy()
+        run_time = self._points[len(self._points) - 1][1]
+        for i in range(repeat - 1):
+            for ii in range(len(self._points)):
+                repeated_point = [self._points[ii][0], self._points[ii][1] + (run_time + delay_time) * (i + 1)]
+                temp.append(repeated_point)
+                self._time_values.append(repeated_point[1])
+                self._time_values.append(repeated_point[0])
+        self._points = temp
 
     def _read_csv(self, path: str):
         data = []
@@ -188,7 +219,7 @@ def sleep_until(func, sleep_time=0.001):
         time.sleep(sleep_time)
 
 
-def _get_num(num: str, default=0):
+def _get_num(num: str, default: float = 0):
     try:
         return float(num)
     except ValueError:
@@ -212,7 +243,24 @@ class Experiment(Thread):
         for key in kwargs:
             self.__dict__[key] = kwargs[key]
         self.data = []
-        self._profile = Profile(kwargs["profile_file_path"], Profile.EVENLY_SPACED, kwargs["run_time"])
+        try:
+            repeat = int(kwargs["repeat"].get())
+        except ValueError:
+            repeat = 1
+        profile_type = kwargs["profile_type"]
+        if profile_type==Profile.CUSTOM:
+            self._profile = Profile(
+                kwargs["profile_file_path"], kwargs["profile_type"], kwargs["run_time"], repeat=repeat,
+                profile=[
+                    [_get_num(kwargs["v0"].get()), 0],
+                    [_get_num(kwargs["v1"].get()), _get_num(kwargs["t1"].get(), 1)],
+                    [_get_num(kwargs["v2"].get()), _get_num(kwargs["t2"].get(), 2)]
+                ],
+                delay_time=_get_num(kwargs["delay_time"].get()),
+                step=_get_num(kwargs["step"].get(), 0.25)
+            )
+        else:
+            self._profile = Profile(kwargs["profile_file_path"], kwargs["profile_type"], kwargs["run_time"], repeat=repeat)
         self._time = Timer()
         self._absolute_time = Timer()
         self._progress = 0
@@ -276,23 +324,24 @@ class Experiment(Thread):
         setpoints = self._profile.get_setpoints()
         while self._active:
             if self._run_mode==Experiment.AUTOMATIC:
-                target_voltage, scheduled_time = setpoints[i]
+                target_volts, scheduled_time = setpoints[i]
                 sleep_until(
                     lambda: self._time.elapsed_time_seconds() > scheduled_time or self._run_mode==Experiment.MANUAL)
                 if self._run_mode==Experiment.AUTOMATIC:
-                    self._power_supply.set_volts(max(target_voltage, 0))
+                    self._power_supply.set_volts(max(target_volts, 0))
                     self._progress = self._profile.calculate_progress(i)
                     i += 1
-                    self["graph"].add_to(0, scheduled_time + self._time.get_time_paused(), target_voltage)
+                    self["graph"].add_to(0, scheduled_time + self._time.get_time_paused(), target_volts)
                     if i==len(setpoints):
                         break
             else:
                 target_power = _get_num(self["target_power"].get())
                 self._controller.set_gains(_get_num(self["kp"].get()), _get_num(self["ki"].get()), _get_num(self["kd"].get()))
                 calculated_volts_increase = self._controller.calculate(self._power_supply.get_power(), target_power)
-                self._power_supply.set_volts(min(self._power_supply.get_target_volts() + calculated_volts_increase, 200))
-                self["graph"].add_to(0, self._absolute_time.elapsed_time_seconds(), min(self._power_supply.get_target_volts() + calculated_volts_increase, 200))
-                time.sleep(0.1)
+                target_volts = min(self._power_supply.get_target_volts() + calculated_volts_increase, 200)
+                self._power_supply.set_volts(target_volts)
+                self["graph"].add_to(0, self._absolute_time.elapsed_time_seconds(), target_volts)
+                time.sleep(0.03)
 
     def _save_experiment_data(self):
         now = datetime.now()
@@ -363,9 +412,9 @@ class Experiment(Thread):
         self._run_experiment()
         if end_at_zero:
             self._power_supply.set_volts(0)
-            self._update_displays()
+            self["graph"].add_to(0, self._absolute_time.elapsed_time_seconds(), 0)
         if self._active:
-            time.sleep(0.05)
+            time.sleep(0.2)
             self["progress_readout"].recolor(FINISHED_GREEN)
             self["on_finish"]()
             self._save_experiment_data()

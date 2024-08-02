@@ -78,6 +78,7 @@ def main():
             return
         experiment_settings = {
             "profile_file_path": file_path,
+            "profile_type": profile_menu.get_selected_option(),
             "data_storage_folder_path": folder_path,
             "run_time": time_input,
             "end_at_zero": reset_voltage,
@@ -95,6 +96,14 @@ def main():
             "kp": kp_entry,
             "ki": ki_entry,
             "kd": kd_entry,
+            "repeat": repeat_entry,
+            "v0": start_volts_entry,
+            "v1": middle_volts_entry,
+            "v2": end_volts_entry,
+            "t1": middle_time_entry,
+            "t2": end_time_entry,
+            "delay_time": delay_time_entry,
+            "step": step_entry
         }
         Experiment(**experiment_settings).start()
         window.after(50, lambda: stop_button_frame.grid(row=0, column=1))
@@ -124,10 +133,10 @@ def main():
         stop_button_frame.grid_forget()
 
     def save_settings():
-        def verify_is_number(num: str, dict, key):
+        def verify_is_number(num: str, dictionary, key):
             try:
                 float(num)
-                dict[key] = num
+                dictionary[key] = num
             except ValueError:
                 pass
 
@@ -147,6 +156,11 @@ def main():
             verify_is_number(kp_entry.get(), to_save, "kp")
             verify_is_number(ki_entry.get(), to_save, "ki")
             verify_is_number(kd_entry.get(), to_save, "kd")
+            verify_is_number(start_volts_entry.get(), to_save, "v0")
+            verify_is_number(middle_volts_entry.get(), to_save, "v1")
+            verify_is_number(end_volts_entry.get(), to_save, "v2")
+            verify_is_number(middle_time_entry.get(), to_save, "t1")
+            verify_is_number(end_time_entry.get(), to_save, "t2")
             to_save["reset_voltage"] = reset_voltage.get()
             json.dump(to_save, file)
 
@@ -233,26 +247,44 @@ def main():
             time_input_container.grid(row=0, column=2)
         else:
             time_input_container.grid_forget()
+        if profile_menu.get_selected_option()=="Custom":
+            custom_profile_frame.grid(row=0, column=3)
+        else:
+            custom_profile_frame.grid_forget()
 
-    profile_manager_frame, profile_menu = label_menu_group(
-        experiment_config_frame, "Profile type", *["Evenly spaced", "Ordered pairs"]
-    )
+    profile_manager_frame, profile_menu = label_menu_group(experiment_config_frame, "Profile type", *["Evenly spaced", "Ordered pairs", "Custom"])
 
-    time_input_container, time_input = label_entry_group(
-        profile_manager_frame, settings["test_time"], 4, "Test time (s)"
-    )
+    time_input_container, time_input = label_entry_group(profile_manager_frame, settings["test_time"], 4, "Test time (s)")
     time_input_container.config(background=GRAY)
 
-    profile_menu.on_option_select(toggle_time_input_visibility)
-    profile_menu.select_option(settings["profile_type"])
+    custom_profile_frame = tk.Frame(profile_manager_frame, background=GRAY)
+    start_frame, start_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V0")
+    start_frame.grid(row=0, column=0)
+    middle_frame, middle_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V1")
+    middle_frame.grid(row=0, column=1)
+    middle_time_frame, middle_time_entry = label_entry_group(custom_profile_frame, "0", 5, "t1")
+    middle_time_frame.grid(row=0, column=2)
+    end_frame, end_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V2")
+    end_frame.grid(row=0, column=3)
+    end_time_frame, end_time_entry = label_entry_group(custom_profile_frame, "0", 5, "t2")
+    end_time_frame.grid(row=0, column=4)
+    delay_time_frame, delay_time_entry = label_entry_group(custom_profile_frame, "0", 5, "delay")
+    delay_time_frame.grid(row=0, column=5)
+    step_frame, step_entry = label_entry_group(custom_profile_frame, "0", 4, "step")
+    step_frame.grid(row=0, column=6)
 
-    check_container, reset_voltage = label_switch_group(profile_manager_frame, "Set voltage to zero at experiment end")
+    repeat_frame, repeat_entry = label_entry_group(profile_manager_frame, "1", 3, "Loop")
+    repeat_frame.grid(row=0, column=4)
+
+    check_container, reset_voltage = label_switch_group(profile_manager_frame, "End at 0")
     reset_voltage.set(bool(settings["reset_voltage"]))
     check_container.config(background=GRAY)
-    check_container.grid(row=0, column=3)
+    check_container.grid(row=0, column=5)
 
     profile_manager_frame.config(background=GRAY, pady=DEFAULT_VERTICAL_SPACING)
     profile_manager_frame.grid(row=3, column=0, sticky=tk.W)
+    profile_menu.on_option_select(toggle_time_input_visibility)
+    profile_menu.select_option(settings["profile_type"])
     # End region
 
     # Region connection status (row 4)

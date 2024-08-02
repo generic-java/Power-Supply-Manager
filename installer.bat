@@ -1,4 +1,7 @@
 @echo off
+
+@pip install pyinstaller
+
 set /P user_input=Enter the installation directory:
 set installation_dir="%user_input:"=%
 set fonts_dir=\fonts

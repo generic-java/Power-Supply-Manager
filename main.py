@@ -66,7 +66,7 @@ def main():
                 file_path.set(askopenfilename(filetypes=[("CSV Files", ".csv")]))
                 start_new_experiment()
             else:
-                start_experiment_button.setState(on=True)
+                start_experiment_button.set_state(on=True)
             return
         try:
             float(time_input.get())
@@ -123,13 +123,13 @@ def main():
                 start_new_experiment()
 
     def stop_experiment():
-        start_experiment_button.setState(on=True)
+        start_experiment_button.set_state(on=True)
         kill_active_experiment()
         stop_button_frame.grid_forget()
         progress_frame.grid_forget()
 
     def on_experiment_end():
-        start_experiment_button.setState(on=True)
+        start_experiment_button.set_state(on=True)
         stop_button_frame.grid_forget()
 
     def save_settings():
@@ -161,6 +161,8 @@ def main():
             verify_is_number(end_volts_entry.get(), to_save, "v2")
             verify_is_number(middle_time_entry.get(), to_save, "t1")
             verify_is_number(end_time_entry.get(), to_save, "t2")
+            verify_is_number(delay_time_entry.get(), to_save, "delay_time")
+            verify_is_number(step_entry.get(), to_save, "step")
             to_save["reset_voltage"] = reset_voltage.get()
             json.dump(to_save, file)
 
@@ -258,19 +260,19 @@ def main():
     time_input_container.config(background=GRAY)
 
     custom_profile_frame = tk.Frame(profile_manager_frame, background=GRAY)
-    start_frame, start_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V0")
+    start_frame, start_volts_entry = label_entry_group(custom_profile_frame, settings["v0"], 4, "V0")
     start_frame.grid(row=0, column=0)
-    middle_frame, middle_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V1")
+    middle_frame, middle_volts_entry = label_entry_group(custom_profile_frame, settings["v1"], 4, "V1")
     middle_frame.grid(row=0, column=1)
-    middle_time_frame, middle_time_entry = label_entry_group(custom_profile_frame, "0", 5, "t1")
+    middle_time_frame, middle_time_entry = label_entry_group(custom_profile_frame, settings["t1"], 5, "t1")
     middle_time_frame.grid(row=0, column=2)
-    end_frame, end_volts_entry = label_entry_group(custom_profile_frame, "0", 4, "V2")
+    end_frame, end_volts_entry = label_entry_group(custom_profile_frame, settings["v2"], 4, "V2")
     end_frame.grid(row=0, column=3)
-    end_time_frame, end_time_entry = label_entry_group(custom_profile_frame, "0", 5, "t2")
+    end_time_frame, end_time_entry = label_entry_group(custom_profile_frame, settings["t2"], 5, "t2")
     end_time_frame.grid(row=0, column=4)
-    delay_time_frame, delay_time_entry = label_entry_group(custom_profile_frame, "0", 5, "delay")
+    delay_time_frame, delay_time_entry = label_entry_group(custom_profile_frame, settings["delay_time"], 5, "delay")
     delay_time_frame.grid(row=0, column=5)
-    step_frame, step_entry = label_entry_group(custom_profile_frame, "0", 4, "step")
+    step_frame, step_entry = label_entry_group(custom_profile_frame, settings["step"], 4, "step")
     step_frame.grid(row=0, column=6)
 
     repeat_frame, repeat_entry = label_entry_group(profile_manager_frame, "1", 3, "Loop")

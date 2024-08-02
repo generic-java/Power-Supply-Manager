@@ -4,14 +4,16 @@
   "data_storage_folder_path": "C:/Users/Sam/Desktop/Power Supply Manager User Data/Experiment Data",
   "profile_type": "Custom",
   "control_type": 0,
-  "kp": "0.25",
+  "kp": "0",
   "ki": "0",
   "kd": "0",
-  "test_time": "30",
+  "test_time": "60",
   "reset_voltage": false,
   "v0": "0",
   "v1": "0",
   "v2": "0",
   "t1": "0",
-  "t2": "0"
+  "t2": "0",
+  "delay_time": "0",
+  "step": "0.5"
 }
